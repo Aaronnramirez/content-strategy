@@ -556,7 +556,160 @@ csvInput.addEventListener('change',e=>{if(e.target.files[0])loadCSV(e.target.fil
 document.getElementById('csv-clear').addEventListener('click',()=>{S.csv=null;persist();document.getElementById('csv-preview').style.display='none';csvInput.value='';});
 function loadCSV(file){const reader=new FileReader();reader.onload=e=>{const rows=parseCSV(e.target.result);if(!rows.length){alert('Could not parse CSV');return;}S.csv={filename:file.name,rows,at:Date.now()};persist();renderCSVTable();};reader.readAsText(file);}
 function parseCSV(txt){return txt.split(/\r?\n/).filter(l=>l.trim()).map(line=>{const row=[];let inQ=false,cur='';for(const c of line){if(c==='"'){inQ=!inQ;}else if(c===','&&!inQ){row.push(cur.trim());cur='';}else{cur+=c;}}row.push(cur.trim());return row;});}
-function renderCSVTable(){const d=S.csv;if(!d)return;const[headers,...rows]=d.rows;document.getElementById('csv-filename').textContent=d.filename;document.getElementById('csv-stats').textContent=`${rows.length} rows · ${headers.length} columns · loaded ${fmtDate(new Date(d.at).toISOString().slice(0,10))}`;document.getElementById('csv-thead').innerHTML='<tr>'+headers.map(h=>`<th>${h}</th>`).join('')+'</tr>';document.getElementById('csv-tbody').innerHTML=rows.slice(0,500).map(r=>'<tr>'+headers.map((_,i)=>`<td title="${(r[i]||'').replace(/"/g,'&quot;')}">${r[i]||''}</td>`).join('')+'</tr>').join('')+(rows.length>500?`<tr><td colspan="${headers.length}" style="text-align:center;color:var(--text-muted);padding:12px">Showing first 500 of ${rows.length} rows</td></tr>`:'');document.getElementById('csv-preview').style.display='block';}
+
+function isVideoCSV(headers){const h=headers.map(x=>x.toLowerCase().trim());return h.some(x=>x.includes('video title')||x.includes('video publish'));}
+
+function detectVideoCols(headers){
+  const h=headers.map(x=>x.toLowerCase().trim());
+  const find=(...t)=>h.findIndex(x=>t.some(s=>x.includes(s)));
+  return{
+    content:     find('content'),
+    title:       find('video title','title'),
+    publishTime: find('publish time','published'),
+    duration:    find('duration'),
+    views:       find('views'),
+    watchTime:   find('watch time'),
+    subs:        find('subscriber'),
+    revenue:     find('revenue'),
+    impressions: h.findIndex(x=>x.includes('impression')&&!x.includes('click')&&!x.includes('through')),
+    ctr:         find('click-through','ctr'),
+  };
+}
+
+let selectedVideoIdx = 0;
+
+function getTop20(headers, rows) {
+  const cols = detectVideoCols(headers);
+  const data = rows.filter(r=>{
+    const t = cols.title !== -1 ? (r[cols.title]||'').trim() : '';
+    const c = cols.content !== -1 ? (r[cols.content]||'').trim() : '';
+    return t && t.toLowerCase() !== 'total' && c;
+  });
+  if (cols.views !== -1) data.sort((a,b)=>(parseNum(b[cols.views])||0)-(parseNum(a[cols.views])||0));
+  return { top20: data.slice(0,20), cols };
+}
+
+function renderCSVTable(){
+  const d=S.csv; if(!d)return;
+  const[headers,...rows]=d.rows;
+  document.getElementById('csv-filename').textContent=d.filename;
+  document.getElementById('csv-stats').textContent=`${rows.length} rows · ${headers.length} columns · loaded ${fmtDate(new Date(d.at).toISOString().slice(0,10))}`;
+  document.getElementById('csv-preview').style.display='block';
+  if(isVideoCSV(headers)){ selectedVideoIdx=0; renderVideoTabs(headers,rows); }
+  else { renderRawTable(headers,rows); }
+}
+
+function renderRawTable(headers,rows){
+  document.getElementById('csv-content').innerHTML=`<div class="csv-scroll"><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.slice(0,500).map(r=>'<tr>'+headers.map((_,i)=>`<td title="${(r[i]||'').replace(/"/g,'&quot;')}">${r[i]||''}</td>`).join('')+'</tr>').join('')}${rows.length>500?`<tr><td colspan="${headers.length}" style="text-align:center;color:var(--text-muted);padding:12px">Showing first 500 of ${rows.length} rows</td></tr>`:''}</tbody></table></div>`;
+}
+
+function renderVideoTabs(headers, rows){
+  const{top20,cols}=getTop20(headers,rows);
+  const maxViews=parseNum(top20[0]?.[cols.views])||1;
+  const listHTML=top20.map((row,i)=>{
+    const title=cols.title!==-1?(row[cols.title]||'Untitled'):'Untitled';
+    const views=cols.views!==-1?parseNum(row[cols.views])||0:0;
+    const barW=Math.round(views/maxViews*100);
+    return `<div class="video-list-item${i===selectedVideoIdx?' active':''}" onclick="selectVideo(${i})">
+      <div class="video-rank">#${i+1}</div>
+      <div class="video-list-info">
+        <div class="video-list-title">${title}</div>
+        <div class="video-list-views">${fmtNum(views)} views</div>
+        <div class="video-list-bar"><div class="video-list-bar-fill" style="width:${barW}%"></div></div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('csv-content').innerHTML=`
+    <div class="csv-video-layout">
+      <div class="video-list">
+        <div class="video-list-header">Top ${top20.length} Videos by Views</div>
+        ${listHTML}
+      </div>
+      <div class="video-detail" id="video-detail-panel">${buildVideoDetail(top20[selectedVideoIdx],cols,maxViews,top20)}</div>
+    </div>`;
+}
+
+function selectVideo(idx){
+  selectedVideoIdx=idx;
+  const d=S.csv; if(!d)return;
+  const[headers,...rows]=d.rows;
+  const{top20,cols}=getTop20(headers,rows);
+  const maxViews=parseNum(top20[0]?.[cols.views])||1;
+  document.querySelectorAll('.video-list-item').forEach((el,i)=>el.classList.toggle('active',i===idx));
+  document.getElementById('video-detail-panel').innerHTML=buildVideoDetail(top20[idx],cols,maxViews,top20);
+}
+
+function buildVideoDetail(row,cols,maxViews,top20){
+  const title     = cols.title!==-1?(row[cols.title]||'Untitled'):'Untitled';
+  const views     = cols.views!==-1?parseNum(row[cols.views])||0:0;
+  const watchH    = cols.watchTime!==-1?parseNum(row[cols.watchTime]):null;
+  const subs      = cols.subs!==-1?parseNum(row[cols.subs]):null;
+  const revenue   = cols.revenue!==-1?parseNum(row[cols.revenue]):null;
+  const impr      = cols.impressions!==-1?parseNum(row[cols.impressions]):null;
+  const ctr       = cols.ctr!==-1?parseNum(row[cols.ctr]):null;
+  const dur       = cols.duration!==-1?parseInt(row[cols.duration])||0:0;
+  const pubRaw    = cols.publishTime!==-1?row[cols.publishTime]:'';
+  const contentId = cols.content!==-1?(row[cols.content]||'').trim():'';
+  const rank      = top20.indexOf(row)+1;
+
+  // Format duration
+  const h=Math.floor(dur/3600),m=Math.floor((dur%3600)/60),s=dur%60;
+  const durStr=dur?(h>0?`${h}h ${m}m ${s}s`:`${m}m ${s}s`):'';
+
+  // Format publish date
+  let pubStr='';
+  if(pubRaw){const pd=new Date(pubRaw);if(!isNaN(pd))pubStr=fmtDateShort(pd);}
+
+  const maxWatch=watchH!==null?Math.max(...top20.map(r=>parseNum(r[cols.watchTime])||0)):1;
+  const maxImpr=impr!==null?Math.max(...top20.map(r=>parseNum(r[cols.impressions])||0)):1;
+
+  // Stat cards
+  const stats=[
+    {label:'Views',      value:fmtNum(views),                                    sub:`#${rank} of top 20`,   color:CHART_COLORS.views},
+    watchH!==null?{label:'Watch Time', value:fmtNum(Math.round(watchH))+'h',     sub:fmtNum(Math.round(watchH*60))+' mins', color:CHART_COLORS.watchTime}:null,
+    subs!==null?  {label:'Subscribers',value:(subs>=0?'+':'')+fmtNum(subs),       sub:'gained',              color:CHART_COLORS.subscribers}:null,
+    revenue!==null?{label:'Revenue',   value:'$'+revenue.toFixed(2),              sub:'estimated',           color:CHART_COLORS.impressions}:null,
+    impr!==null?  {label:'Impressions',value:fmtNum(impr),                        sub:'',                    color:CHART_COLORS.ctr}:null,
+    ctr!==null?   {label:'CTR',        value:ctr.toFixed(1)+'%',                  sub:'click-through',       color:CHART_COLORS.suggested}:null,
+  ].filter(Boolean);
+
+  const statCardsHTML=stats.map(c=>`
+    <div class="video-stat-card">
+      <div class="video-stat-label">${c.label}</div>
+      <div class="video-stat-value" style="color:${c.color}">${c.value}</div>
+      ${c.sub?`<div class="video-stat-sub">${c.sub}</div>`:''}
+    </div>`).join('');
+
+  // Performance bars vs #1
+  const perfRows=[
+    {label:'Views',      pct:(views/maxViews*100).toFixed(1),    color:CHART_COLORS.views},
+    watchH!==null?{label:'Watch Time', pct:(watchH/maxWatch*100).toFixed(1), color:CHART_COLORS.watchTime}:null,
+    impr!==null?  {label:'Impressions',pct:(impr/maxImpr*100).toFixed(1),    color:CHART_COLORS.ctr}:null,
+  ].filter(Boolean);
+
+  const perfHTML=perfRows.map(r=>`
+    <div class="video-perf-row">
+      <div class="video-perf-label">${r.label}</div>
+      <div class="video-perf-bar-wrap"><div class="video-perf-bar-fill" style="width:${r.pct}%;background:${r.color}"></div></div>
+      <div class="video-perf-pct">${r.pct}%</div>
+    </div>`).join('');
+
+  const ytLink=contentId?`<a class="video-yt-link" href="https://youtube.com/watch?v=${contentId}" target="_blank" rel="noopener">↗ Watch on YouTube</a>`:'';
+
+  return `
+    <div class="video-detail-rank">🏆 #${rank} Most Viewed</div>
+    <div class="video-detail-title">${title}</div>
+    <div class="video-detail-meta">
+      ${pubStr?`<div class="video-detail-meta-item">📅 ${pubStr}</div>`:''}
+      ${durStr?`<div class="video-detail-meta-item">⏱ ${durStr}</div>`:''}
+      ${ytLink}
+    </div>
+    <div class="video-stat-grid">${statCardsHTML}</div>
+    <div class="video-perf-section">
+      <div class="video-perf-title">Performance vs #1 Video</div>
+      ${perfHTML}
+    </div>`;
+}
 
 // ════════════════ HELPERS ════════════════
 function uid(){return Math.random().toString(36).slice(2)+Date.now().toString(36);}
