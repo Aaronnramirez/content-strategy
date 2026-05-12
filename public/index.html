@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Content Strategy</title>
+<link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <h1>Content OS</h1>
+    <p>Strategy Tracker</p>
+  </div>
+  <ul class="nav">
+    <li><div class="nav-item active" data-section="calendar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Calendar
+    </div></li>
+    <li><div class="nav-item" data-section="board">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Board
+    </div></li>
+    <li><div class="nav-item" data-section="inspo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      Inspo Board
+    </div></li>
+    <li><div class="nav-item" data-section="analytics">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Analytics
+    </div></li>
+    <li><div class="nav-item" data-section="import">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      CSV Import
+    </div></li>
+  </ul>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="topbar">
+    <div>
+      <h2 id="topbar-title">Calendar</h2>
+      <p id="topbar-sub">Your content schedule — current month through the next 6</p>
+    </div>
+    <div class="page-actions" id="page-actions">
+      <button class="btn btn-primary btn-sm" onclick="openEventModal(null)">+ Add Content</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- CALENDAR -->
+    <section class="section active" id="section-calendar">
+
+      <!-- Goals strip -->
+      <div class="goals-section">
+        <div class="goals-toggle" id="goals-toggle" onclick="toggleGoals()">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:15px">🎯</span>
+            <h3>Goals</h3>
+            <span class="goals-badge" id="goals-badge" style="display:none">0</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <button class="btn btn-primary btn-xs" onclick="event.stopPropagation();openGoalModal(null)">+ Add Goal</button>
+            <span class="goals-chevron" id="goals-chevron">▼</span>
+          </div>
+        </div>
+        <div class="goals-body" id="goals-body">
+          <div class="goals-grid" id="goals-grid"></div>
+        </div>
+      </div>
+
+      <div class="multi-cal" id="multi-cal"></div>
+    </section>
+
+    <!-- BOARD -->
+    <section class="section" id="section-board">
+      <div class="board-layout">
+        <div>
+          <div class="panel-card">
+            <div class="panel-header">
+              <h3>Buckets</h3>
+              <button class="btn btn-primary btn-xs" onclick="openBucketModal()">+ New Bucket</button>
+            </div>
+            <div class="bucket-tabs-bar" id="bucket-tabs-bar"></div>
+            <div id="bucket-panels"></div>
+          </div>
+        </div>
+        <div>
+          <div class="panel-card">
+            <div class="panel-header">
+              <h3>Channels</h3>
+              <button class="btn btn-primary btn-xs" onclick="openChannelModal()">+ Add</button>
+            </div>
+            <div class="channels-list" id="channels-list"></div>
+            <div class="panel-empty" id="channels-empty" style="display:none">
+              <strong>No channels yet</strong>Add platforms like YouTube, Instagram, TikTok…
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- INSPO BOARD -->
+    <section class="section" id="section-inspo">
+      <div class="inspo-toolbar">
+        <div class="inspo-filters" id="inspo-filters"></div>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button class="btn btn-ghost btn-sm" onclick="openInspoModal('link')">🔗 Add Link</button>
+          <button class="btn btn-primary btn-sm" onclick="openInspoModal('image')">+ Add Image</button>
+        </div>
+      </div>
+      <div class="inspo-grid" id="inspo-grid"></div>
+    </section>
+
+    <!-- ANALYTICS -->
+    <section class="section" id="section-analytics">
+      <div class="inner-tabs">
+        <div class="inner-tab active" data-panel="yt-data">📊 YouTube Data</div>
+        <div class="inner-tab" data-panel="yt-suggested">✨ Suggested Traffic</div>
+      </div>
+      <div class="inner-panel active" id="panel-yt-data">
+        <div class="yt-toolbar">
+          <div class="yt-toolbar-left">
+            <div class="range-btns">
+              <button class="range-btn" data-days="7">7d</button>
+              <button class="range-btn" data-days="28">28d</button>
+              <button class="range-btn active" data-days="90">90d</button>
+            </div>
+            <div class="period-nav">
+              <button class="period-btn" id="period-prev">&#8592;</button>
+              <span class="range-label" id="range-label">—</span>
+              <button class="period-btn" id="period-next">&#8594;</button>
+            </div>
+          </div>
+        </div>
+        <div id="yt-data-content"></div>
+      </div>
+      <div class="inner-panel" id="panel-yt-suggested">
+        <div id="yt-sug-content"></div>
+      </div>
+    </section>
+
+    <!-- CSV IMPORT -->
+    <section class="section" id="section-import">
+      <div class="drop-zone" id="drop-zone">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+        <p><strong>Drop a YouTube Studio CSV export here</strong> or click to browse</p>
+        <p style="font-size:12px;margin-top:6px">Overview or Traffic Sources CSV both work</p>
+        <input type="file" id="csv-input" accept=".csv"/>
+      </div>
+      <div class="csv-preview" id="csv-preview" style="display:none">
+        <div class="csv-header">
+          <div><h3 id="csv-filename"></h3><p id="csv-stats"></p></div>
+          <button class="btn btn-ghost btn-sm" id="csv-clear">Clear</button>
+        </div>
+        <div class="csv-scroll">
+          <table><thead id="csv-thead"></thead><tbody id="csv-tbody"></tbody></table>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<!-- Tooltip -->
+<div class="chart-tooltip" id="chart-tooltip"></div>
+
+<!-- ════ MODALS ════ -->
+
+<!-- Event modal -->
+<div class="modal-backdrop" id="modal-event" style="display:none">
+  <div class="modal">
+    <div class="modal-header"><h3 id="modal-event-title">Add Content</h3><button class="modal-close" onclick="closeModal('modal-event')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Title *</label><input id="ev-title" type="text" placeholder="Content title"/></div>
+      <div class="form-row">
+        <div class="form-group"><label>Bucket</label><select id="ev-bucket"><option value="">— None —</option></select></div>
+        <div class="form-group"><label>Channel</label><select id="ev-channel"><option value="">— None —</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Date</label><input id="ev-date" type="date"/></div>
+        <div class="form-group"><label>Status</label>
+          <select id="ev-status"><option value="idea">Idea</option><option value="scripting">Scripting</option><option value="recording">Recording</option><option value="editing">Editing</option><option value="scheduled">Scheduled</option><option value="published">Published</option></select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:0"><label>Notes</label><textarea id="ev-notes" placeholder="Notes…"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-event')">Cancel</button>
+      <button class="btn btn-primary" id="save-event-btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Event detail modal -->
+<div class="modal-backdrop" id="modal-detail" style="display:none">
+  <div class="modal">
+    <div class="modal-header"><h3 id="detail-title-text" style="flex:1;margin-right:12px"></h3><button class="modal-close" onclick="closeModal('modal-detail')">&times;</button></div>
+    <div class="modal-body" id="detail-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="detail-del-btn">Delete</button>
+      <button class="btn btn-ghost" onclick="closeModal('modal-detail')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bucket modal -->
+<div class="modal-backdrop" id="modal-bucket" style="display:none">
+  <div class="modal">
+    <div class="modal-header"><h3>New Bucket</h3><button class="modal-close" onclick="closeModal('modal-bucket')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Name *</label><input id="bk-name" type="text" placeholder="e.g. Long-Form Video, Newsletter…"/></div>
+      <div class="form-group"><label>Color</label><div class="color-row" id="bk-colors"></div></div>
+      <div class="form-group" style="margin-bottom:0"><label>Description</label><textarea id="bk-desc" placeholder="What kind of content goes here?"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-bucket')">Cancel</button>
+      <button class="btn btn-primary" id="save-bucket-btn">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bucket item modal -->
+<div class="modal-backdrop" id="modal-bi" style="display:none">
+  <div class="modal">
+    <div class="modal-header"><h3 id="bi-modal-title">Add Item</h3><button class="modal-close" onclick="closeModal('modal-bi')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Title *</label><input id="bi-title" type="text" placeholder="Content title"/></div>
+      <div class="form-row">
+        <div class="form-group"><label>Status</label>
+          <select id="bi-status"><option value="idea">Idea</option><option value="scripting">Scripting</option><option value="recording">Recording</option><option value="editing">Editing</option><option value="scheduled">Scheduled</option><option value="published">Published</option></select>
+        </div>
+        <div class="form-group"><label>Due Date</label><input id="bi-date" type="date"/></div>
+      </div>
+      <div class="form-group"><label>Channel</label><select id="bi-channel"><option value="">— None —</option></select></div>
+      <div class="form-group" style="margin-bottom:0"><label>Notes</label><textarea id="bi-notes" placeholder="Notes…"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-bi')">Cancel</button>
+      <button class="btn btn-primary" id="save-bi-btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Channel modal -->
+<div class="modal-backdrop" id="modal-channel" style="display:none">
+  <div class="modal">
+    <div class="modal-header"><h3>Add Channel</h3><button class="modal-close" onclick="closeModal('modal-channel')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label>Name *</label><input id="ch-name" type="text" placeholder="YouTube, Instagram…"/></div>
+        <div class="form-group"><label>Icon (emoji)</label><input id="ch-icon" type="text" placeholder="📺" maxlength="4"/></div>
+      </div>
+      <div class="form-group"><label>Handle / URL</label><input id="ch-handle" type="text" placeholder="@handle"/></div>
+      <div class="form-group"><label>Color</label><div class="color-row" id="ch-colors"></div></div>
+      <div class="form-row">
+        <div class="form-group"><label>Followers</label><input id="ch-followers" type="text" placeholder="12.5k"/></div>
+        <div class="form-group"><label>Frequency</label><input id="ch-freq" type="text" placeholder="3×/week"/></div>
+      </div>
+      <div class="form-group" style="margin-bottom:0"><label>Strategy Notes</label><textarea id="ch-notes" placeholder="Goals, tone, audience…"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-channel')">Cancel</button>
+      <button class="btn btn-primary" id="save-ch-btn">Add Channel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Goal modal -->
+<div class="modal-backdrop" id="modal-goal" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="goal-modal-title">Add Goal</h3>
+      <button class="modal-close" onclick="closeModal('modal-goal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Platform</label>
+        <div class="plat-select-row" id="goal-plat-pills"></div>
+        <input id="goal-custom-plat" type="text" placeholder="Or type a custom platform…" style="margin-top:8px;font-size:12.5px;padding:6px 10px"/>
+      </div>
+      <div class="form-group">
+        <label>Profile / Channel URL</label>
+        <input id="goal-url" type="url" placeholder="https://youtube.com/@yourchannel"/>
+      </div>
+      <div class="form-group">
+        <label>Tracking</label>
+        <select id="goal-metric">
+          <option value="Subscribers">Subscribers</option>
+          <option value="Followers">Followers</option>
+          <option value="Views">Total Views</option>
+          <option value="Watch Hours">Watch Hours</option>
+          <option value="Monthly Listeners">Monthly Listeners</option>
+          <option value="Impressions">Impressions</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Current Count</label>
+          <input id="goal-current" type="number" placeholder="0" min="0"/>
+        </div>
+        <div class="form-group">
+          <label>Goal 🎯</label>
+          <input id="goal-target" type="number" placeholder="100000" min="0"/>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>Notes (target date, strategy…)</label>
+        <textarea id="goal-notes" placeholder="e.g. Reach 100K by Dec 2025 by posting 3x/week"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-goal')">Cancel</button>
+      <button class="btn btn-primary" id="save-goal-btn">Save Goal</button>
+    </div>
+  </div>
+</div>
+
+<!-- Inspo modal -->
+<div class="modal-backdrop" id="modal-inspo" style="display:none">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="inspo-modal-title">Add Inspo</h3>
+      <button class="modal-close" onclick="closeModal('modal-inspo')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="type-switcher">
+        <button class="type-btn active" id="type-btn-image" onclick="switchInspoType('image')">🖼 Image</button>
+        <button class="type-btn" id="type-btn-link" onclick="switchInspoType('link')">🔗 Link</button>
+      </div>
+
+      <div id="inspo-image-panel">
+        <div class="form-group">
+          <label>Image — drop, click, or paste (<span class="kbd">⌘V</span> / <span class="kbd">Ctrl+V</span>)</label>
+          <div class="img-drop-zone" id="img-drop-zone">
+            <div id="img-placeholder">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin:0 auto 10px;display:block;opacity:.35"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <p><strong>Drop image here</strong> or click to browse</p>
+              <p style="margin-top:4px;font-size:11.5px">or press <span class="kbd">⌘V</span> to paste from clipboard</p>
+            </div>
+            <div id="img-preview-wrap" class="img-preview-wrap" style="display:none">
+              <img id="img-preview" src="" alt="preview"/>
+              <button class="img-preview-clear" onclick="clearInspoImage(event)" title="Remove image">&times;</button>
+            </div>
+            <input type="file" id="img-file-input" accept="image/*"/>
+          </div>
+        </div>
+      </div>
+
+      <div id="inspo-link-panel" style="display:none">
+        <div class="form-group">
+          <label>URL *</label>
+          <input id="inspo-url" type="url" placeholder="https://…"/>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Title</label>
+        <input id="inspo-title" type="text" placeholder="What's this inspiration?"/>
+      </div>
+
+      <div class="form-group">
+        <label>Platform</label>
+        <div class="plat-select-row" id="plat-pills"></div>
+        <input id="inspo-custom-plat" type="text" placeholder="Or type a custom platform…" style="margin-top:8px;font-size:12.5px;padding:6px 10px"/>
+      </div>
+
+      <div class="form-group" style="margin-bottom:0">
+        <label>Notes</label>
+        <textarea id="inspo-notes" placeholder="Why does this inspire you? What would you take from it?"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-inspo')">Cancel</button>
+      <button class="btn btn-primary" id="save-inspo-btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
