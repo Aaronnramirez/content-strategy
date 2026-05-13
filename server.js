@@ -71,4 +71,70 @@ app.post('/api/data', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Social stats (follower count fetcher) ──
+app.get('/api/social-stats', requireAuth, async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).json({ error: 'URL required' });
+
+  try {
+    const r = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!r.ok) return res.status(502).json({ error: `Page returned ${r.status}` });
+    const html  = await r.text();
+    const result = extractFollowerCount(url, html);
+    if (result) return res.json(result);
+    res.status(422).json({ error: "Couldn't read follower count from this page. Try updating manually." });
+  } catch (e) {
+    if (e.name === 'TimeoutError') return res.status(504).json({ error: 'Request timed out' });
+    res.status(500).json({ error: 'Failed to fetch the page' });
+  }
+});
+
+function extractFollowerCount(url, html) {
+  const u = url.toLowerCase();
+
+  // YouTube — extracts from ytInitialData embedded JSON
+  if (u.includes('youtube.com') || u.includes('youtu.be')) {
+    const m = html.match(/"subscriberCountText"\s*:\s*\{\s*"simpleText"\s*:\s*"([^"]+)"/);
+    if (m) {
+      const raw   = m[1].replace(/\s*(subscribers?|followers?)\s*/i, '').trim(); // "2.13M"
+      const count = parseShortNum(raw);
+      return { count, formatted: raw, platform: 'YouTube' };
+    }
+    return null;
+  }
+
+  // Instagram
+  if (u.includes('instagram.com')) {
+    let m = html.match(/"edge_followed_by"\s*:\s*\{\s*"count"\s*:\s*(\d+)/);
+    if (!m) m = html.match(/"followers_count"\s*:\s*(\d+)/);
+    if (m) { const count = parseInt(m[1]); return { count, formatted: String(count), platform: 'Instagram' }; }
+    return null;
+  }
+
+  // TikTok
+  if (u.includes('tiktok.com')) {
+    const m = html.match(/"followerCount"\s*:\s*(\d+)/);
+    if (m) { const count = parseInt(m[1]); return { count, formatted: String(count), platform: 'TikTok' }; }
+    return null;
+  }
+
+  return null;
+}
+
+function parseShortNum(s) {
+  const lower = s.toLowerCase().trim();
+  const n = parseFloat(lower.replace(/[^0-9.]/g, ''));
+  if (lower.includes('b')) return Math.round(n * 1e9);
+  if (lower.includes('m')) return Math.round(n * 1e6);
+  if (lower.includes('k')) return Math.round(n * 1e3);
+  return Math.round(n) || 0;
+}
+
 app.listen(PORT, () => console.log(`Content Strategy Tracker running at http://localhost:${PORT}`));

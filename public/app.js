@@ -795,8 +795,11 @@ function buildGoalCard(g, ytStats) {
       csvHTML = `<div class="goal-csv-row">${parts.map(p=>`<span class="goal-csv-stat">${p}</span>`).join('')}${ytStats.dateRange?`<span class="goal-csv-stat" style="background:var(--surface3);color:var(--text-muted)">📅 ${ytStats.dateRange}</span>`:''}</div>`;
   }
 
+  const canSync = g.url && (g.metric === 'Followers' || g.metric === 'Subscribers');
+
   card.innerHTML = `
     <div class="goal-controls">
+      ${canSync ? `<div class="goal-ctrl goal-sync-btn" id="sync-btn-${g.id}" title="Sync follower count" onclick="refreshGoalCount('${g.id}')">↻</div>` : ''}
       <div class="goal-ctrl" title="Edit" onclick="openGoalModal('${g.id}')">✎</div>
       <div class="goal-ctrl" title="Delete" onclick="deleteGoal('${g.id}')">✕</div>
     </div>
@@ -816,11 +819,57 @@ function buildGoalCard(g, ytStats) {
     <div class="goal-bar-wrap">
       <div class="goal-bar-fill" style="width:${pct}%;background:${col}"></div>
     </div>
-    ${g.url ? `<a class="goal-url" href="${g.url}" target="_blank" rel="noopener">↗ ${getDomain(g.url)}</a>` : ''}
+    ${g.url ? `
+      <div class="goal-url-row">
+        <a class="goal-url" href="${g.url}" target="_blank" rel="noopener">↗ ${getDomain(g.url)}</a>
+        ${canSync ? `<span class="goal-sync-label">${g.lastFetched ? `Synced ${timeAgo(g.lastFetched)}` : 'Not synced yet'}</span>` : ''}
+      </div>` : ''}
     ${g.notes ? `<div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5">${g.notes}</div>` : ''}
     ${csvHTML}
   `;
   return card;
+}
+
+async function refreshGoalCount(goalId) {
+  const goal = S.goals.find(g => g.id === goalId);
+  if (!goal || !goal.url) return;
+
+  const btn = document.getElementById(`sync-btn-${goalId}`);
+  if (btn) { btn.classList.add('spinning'); btn.style.pointerEvents = 'none'; }
+
+  try {
+    const res  = await fetch(`/api/social-stats?url=${encodeURIComponent(goal.url)}`, {
+      headers: { 'Authorization': `Bearer ${getToken()}` },
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      if (btn) { btn.classList.remove('spinning'); btn.style.pointerEvents = ''; }
+      showSyncError(goalId, data.error || 'Could not fetch count');
+      return;
+    }
+
+    const idx = S.goals.findIndex(g => g.id === goalId);
+    if (idx !== -1) {
+      S.goals[idx].currentCount = data.count;
+      S.goals[idx].lastFetched  = Date.now();
+    }
+    persist();
+    renderGoals();
+  } catch {
+    if (btn) { btn.classList.remove('spinning'); btn.style.pointerEvents = ''; }
+    showSyncError(goalId, 'Connection error — try again');
+  }
+}
+
+function showSyncError(goalId, msg) {
+  const btn = document.getElementById(`sync-btn-${goalId}`);
+  if (!btn) return;
+  btn.classList.remove('spinning');
+  btn.style.pointerEvents = '';
+  btn.title = msg;
+  btn.style.color = 'var(--accent2)';
+  setTimeout(() => { btn.style.color = ''; btn.title = 'Sync follower count'; }, 3000);
 }
 
 function deleteGoal(id) {
