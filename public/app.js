@@ -39,17 +39,21 @@ let inspoFilter = 'All';
 let inspoType   = 'image';
 let pendingImage = null;
 
+function getToken() { return localStorage.getItem('cos-token') || ''; }
+
 async function load() {
   try {
-    const res = await fetch('/api/data');
+    const res = await fetch('/api/data', { headers: { 'Authorization': `Bearer ${getToken()}` } });
+    if (res.status === 401) { localStorage.removeItem('cos-token'); showAuthScreen(); return false; }
     if (res.ok) { const data = await res.json(); S = { ...S, ...data }; }
-  } catch(e) { console.error('Failed to load data:', e); }
+    return true;
+  } catch(e) { console.error('Failed to load data:', e); return false; }
 }
 
 function persist() {
   fetch('/api/data', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
     body: JSON.stringify(S),
   }).catch(e => console.error('Failed to save data:', e));
 }
@@ -882,11 +886,94 @@ document.getElementById('save-goal-btn').addEventListener('click', () => {
   renderGoals();
 });
 
+// ════════════════ AUTH ════════════════
+let authMode = 'login';
+
+function showAuthScreen() {
+  document.getElementById('auth-overlay').style.display = 'flex';
+  setTimeout(() => document.getElementById('auth-email').focus(), 60);
+}
+function hideAuthScreen() { document.getElementById('auth-overlay').style.display = 'none'; }
+
+function logout() {
+  localStorage.removeItem('cos-token');
+  S = {events:[],buckets:[],channels:[],csv:null,inspo:[],goals:[],goalsOpen:true};
+  document.getElementById('sidebar-user').style.display = 'none';
+  showAuthScreen();
+}
+
+function switchAuthTab(tab) {
+  authMode = tab;
+  document.querySelectorAll('.auth-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.getElementById('auth-confirm-wrap').style.display = tab === 'signup' ? 'block' : 'none';
+  document.getElementById('auth-submit-btn').textContent = tab === 'login' ? 'Sign In' : 'Create Account';
+  document.getElementById('auth-footer-text').innerHTML = tab === 'login'
+    ? `Don't have an account? <span class="auth-switch" onclick="switchAuthTab('signup')">Create one free</span>`
+    : `Already have an account? <span class="auth-switch" onclick="switchAuthTab('login')">Sign in</span>`;
+  document.getElementById('auth-error').style.display = 'none';
+}
+
+document.querySelectorAll('.auth-tab').forEach(tab => {
+  tab.addEventListener('click', () => switchAuthTab(tab.dataset.tab));
+});
+
+document.getElementById('auth-submit-btn').addEventListener('click', async () => {
+  const email    = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  if (!email || !password) { showAuthError('Please enter your email and password.'); return; }
+  if (authMode === 'signup') {
+    if (password.length < 8) { showAuthError('Password must be at least 8 characters.'); return; }
+    if (password !== document.getElementById('auth-confirm').value) { showAuthError('Passwords do not match.'); return; }
+  }
+  const btn = document.getElementById('auth-submit-btn');
+  btn.disabled = true; btn.textContent = authMode === 'login' ? 'Signing in…' : 'Creating account…';
+  try {
+    const res  = await fetch(`/api/auth/${authMode}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showAuthError(data.error || 'Something went wrong.');
+      btn.disabled = false; btn.textContent = authMode === 'login' ? 'Sign In' : 'Create Account';
+      return;
+    }
+    localStorage.setItem('cos-token', data.token);
+    setUserInSidebar(data.email);
+    hideAuthScreen();
+    S = {events:[],buckets:[],channels:[],csv:null,inspo:[],goals:[],goalsOpen:true};
+    const ok = await load(); if (!ok) return;
+    renderCalendar(); renderGoals(); if (S.csv) renderCSVTable();
+  } catch {
+    showAuthError('Connection error. Please try again.');
+    btn.disabled = false; btn.textContent = authMode === 'login' ? 'Sign In' : 'Create Account';
+  }
+});
+
+function showAuthError(msg) {
+  const el = document.getElementById('auth-error'); el.textContent = msg; el.style.display = 'block';
+}
+function setUserInSidebar(email) {
+  document.getElementById('sidebar-user-email').textContent = email;
+  document.getElementById('sidebar-user-avatar').textContent = email[0].toUpperCase();
+  document.getElementById('sidebar-user').style.display = 'flex';
+}
+
+['auth-email','auth-password','auth-confirm'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('auth-submit-btn').click(); });
+});
+
 // ════════════════ INIT ════════════════
 async function init() {
-  await load();
-  renderCalendar();
-  renderGoals();
-  if (S.csv) renderCSVTable();
+  const token = getToken();
+  if (!token) { showAuthScreen(); return; }
+  const ok = await load(); if (!ok) return;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    setUserInSidebar(payload.email);
+  } catch {}
+  renderCalendar(); renderGoals(); if (S.csv) renderCSVTable();
 }
 init();
