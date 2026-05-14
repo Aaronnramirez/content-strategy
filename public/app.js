@@ -32,7 +32,7 @@ function platEmoji(name) {
 function hashStr(s) { let h=0; for(const c of s) h=(Math.imul(31,h)+c.charCodeAt(0))|0; return h; }
 
 // ════════════════ STATE ════════════════
-let S = {events:[],buckets:[],channels:[],csv:null,inspo:[],goals:[],goalsOpen:false};
+let S = {events:[],buckets:[],channels:[],csv:null,inspo:[],goals:[],goalsOpen:false,braindumps:[]};
 let activeBucket = null;
 let inspoFilter = 'All';
 let inspoType   = 'image';
@@ -75,10 +75,12 @@ const TOPBAR_META = {
   calendar:  {title:'Calendar',    sub:'Your content schedule — current month through the next 6'},
   board:     {title:'Board',       sub:'Manage buckets and channels in one place'},
   inspo:     {title:'Inspo Board', sub:'Collect links, images, and references organized by platform'},
+  braindump: {title:'Brain Dump',  sub:'Capture raw ideas and thoughts — no filter, no judgment'},
 };
 const TOPBAR_BTN = {
-  calendar: `<button class="btn btn-primary btn-sm" onclick="openEventModal(null)">+ Add Content</button>`,
-  inspo:    `<button class="btn btn-ghost btn-sm" onclick="openInspoModal('link')">🔗 Link</button><button class="btn btn-primary btn-sm" onclick="openInspoModal('image')">+ Image</button>`,
+  calendar:  `<button class="btn btn-ghost btn-sm" onclick="openEventModal(null)">+ Add Content</button>`,
+  inspo:     `<button class="btn btn-ghost btn-sm" onclick="openInspoModal('link')">🔗 Link</button><button class="btn btn-primary btn-sm" onclick="openInspoModal('image')">+ Image</button>`,
+  braindump: `<button class="btn btn-primary btn-sm" onclick="openBrainDumpModal()">+ New Dump</button>`,
 };
 
 document.querySelectorAll('.nav-item').forEach(el=>{
@@ -93,6 +95,7 @@ document.querySelectorAll('.nav-item').forEach(el=>{
     document.getElementById('page-actions').innerHTML=TOPBAR_BTN[s]||'';
     if(s==='board') renderBoard();
     if(s==='inspo') renderInspo();
+    if(s==='braindump') renderBrainDump();
   });
 });
 
@@ -985,7 +988,7 @@ function hideAuthScreen() { document.getElementById('auth-overlay').style.displa
 
 function logout() {
   localStorage.removeItem('cos-token');
-  S = {events:[],buckets:[],channels:[],csv:null,inspo:[],goals:[],goalsOpen:true};
+  S = {events:[],buckets:[],channels:[],csv:null,inspo:[],goals:[],goalsOpen:false,braindumps:[]};
   document.getElementById('sidebar-user').style.display = 'none';
   showAuthScreen();
 }
@@ -1031,7 +1034,7 @@ document.getElementById('auth-submit-btn').addEventListener('click', async () =>
     localStorage.setItem('cos-token', data.token);
     setUserInSidebar(data.email);
     hideAuthScreen();
-    S = {events:[],buckets:[],channels:[],csv:null,inspo:[],goals:[],goalsOpen:true};
+    S = {events:[],buckets:[],channels:[],csv:null,inspo:[],goals:[],goalsOpen:false,braindumps:[]};
     const ok = await load(); if (!ok) return;
     renderCalendar(); renderGoals(); renderSponsoredTotal();
   } catch {
@@ -1053,6 +1056,56 @@ function setUserInSidebar(email) {
   const el = document.getElementById(id);
   if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('auth-submit-btn').click(); });
 });
+
+// ════════════════ BRAIN DUMP ════════════════
+let _editingBdId = null;
+
+function openBrainDumpModal(bd) {
+  _editingBdId = bd ? bd.id : null;
+  document.getElementById('bd-modal-title').textContent = bd ? 'Edit Dump' : 'New Brain Dump';
+  document.getElementById('bd-title').value = bd?.title || '';
+  document.getElementById('bd-body').value  = bd?.body  || '';
+  openModal('modal-braindump');
+  setTimeout(()=>document.getElementById(bd?.title?'bd-title':'bd-body').focus(), 60);
+}
+
+document.getElementById('save-bd-btn').addEventListener('click', () => {
+  const body = document.getElementById('bd-body').value.trim();
+  if (!body) { alert('Please write something first'); return; }
+  const title = document.getElementById('bd-title').value.trim();
+  if (_editingBdId) {
+    const bd = S.braindumps.find(b => b.id === _editingBdId);
+    if (bd) { bd.title = title; bd.body = body; bd.updatedAt = Date.now(); }
+  } else {
+    S.braindumps.unshift({ id: uid(), title, body, createdAt: Date.now() });
+  }
+  persist(); closeModal('modal-braindump'); renderBrainDump();
+});
+
+function renderBrainDump() {
+  const grid  = document.getElementById('bd-grid');
+  const empty = document.getElementById('bd-empty');
+  if (!grid) return;
+  if (!S.braindumps.length) { grid.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  grid.innerHTML = S.braindumps.map(bd => `
+    <div class="bd-card">
+      <div class="bd-card-actions">
+        <button class="bd-card-edit" onclick="openBrainDumpModal(S.braindumps.find(b=>b.id==='${bd.id}'))" title="Edit">✏️</button>
+        <button class="bd-card-del" onclick="deleteBrainDump('${bd.id}')" title="Delete">&times;</button>
+      </div>
+      ${bd.title ? `<div class="bd-card-title">${escHtml(bd.title)}</div>` : ''}
+      <div class="bd-card-body">${escHtml(bd.body)}</div>
+      <div class="bd-card-date">${new Date(bd.updatedAt||bd.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
+    </div>
+  `).join('');
+}
+
+function deleteBrainDump(id) {
+  if (!confirm('Delete this dump?')) return;
+  S.braindumps = S.braindumps.filter(b => b.id !== id);
+  persist(); renderBrainDump();
+}
 
 // ════════════════ INIT ════════════════
 async function init() {

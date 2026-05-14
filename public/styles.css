@@ -592,6 +592,27 @@ body.actions-open .actions-panel { width:230px;min-width:230px;opacity:1; }
 .actions-item:hover .actions-check-btn { opacity:1; }
 .actions-check-btn:hover { background:#3a6a4e; }
 
+/* ── Brain Dump ── */
+.bd-toolbar{display:flex;justify-content:flex-end;margin-bottom:20px;}
+.bd-grid{columns:3;column-gap:14px;}
+@media(max-width:1100px){.bd-grid{columns:2;}}
+@media(max-width:700px){.bd-grid{columns:1;}}
+.bd-card{break-inside:avoid;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px;display:inline-block;width:100%;position:relative;box-shadow:var(--shadow);transition:box-shadow .15s;}
+.bd-card:hover{box-shadow:var(--shadow-lg);}
+.bd-card-title{font-size:14px;font-weight:800;color:var(--text);margin-bottom:8px;}
+.bd-card-body{font-size:13px;color:var(--text-muted);line-height:1.75;white-space:pre-wrap;word-break:break-word;}
+.bd-card-date{font-size:10.5px;color:var(--text-dim);margin-top:10px;padding-top:8px;border-top:1px solid var(--border);}
+.bd-card-actions{position:absolute;top:10px;right:10px;display:flex;gap:4px;opacity:0;transition:opacity .14s;}
+.bd-card:hover .bd-card-actions{opacity:1;}
+.bd-card-edit{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:13px;padding:2px 5px;border-radius:3px;}
+.bd-card-edit:hover{color:var(--accent);background:var(--accent-bg);}
+.bd-card-del{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px;padding:2px 5px;border-radius:3px;}
+.bd-card-del:hover{color:var(--accent2);background:#f8ede8;}
+.bd-empty{text-align:center;padding:80px 20px;color:var(--text-muted);}
+.bd-empty-icon{font-size:48px;margin-bottom:14px;}
+.bd-empty strong{display:block;font-size:16px;color:var(--text);margin-bottom:6px;}
+.bd-empty p{font-size:13px;margin-bottom:18px;}
+
 /* ── Theme picker ── */
 .theme-picker { position:relative; flex-shrink:0; }
 .theme-current-btn { width:26px;height:26px;border-radius:50%;border:2.5px solid var(--border2);cursor:pointer;transition:transform .15s,border-color .15s;flex-shrink:0;display:block; }

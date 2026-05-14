@@ -63,7 +63,7 @@ app.post('/api/auth/signup', async (req, res) => {
 
   await supabase.from('user_data').insert({
     user_id: user.id,
-    data: { events:[], buckets:[], channels:[], csv:null, inspo:[], goals:[], goalsOpen:true },
+    data: { events:[], buckets:[], channels:[], csv:null, inspo:[], goals:[], goalsOpen:false, braindumps:[] },
   });
 
   const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '365d' });

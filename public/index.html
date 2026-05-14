@@ -42,6 +42,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
       Inspo Board
     </div></li>
+    <li><div class="nav-item" data-section="braindump">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a5 5 0 0 1 5 5c0 2.5-1.5 4.5-3.5 5.4V14h-3v-1.6C8.5 11.5 7 9.5 7 7a5 5 0 0 1 5-5z"/><rect x="9" y="14" width="6" height="2" rx="1"/><rect x="10" y="16" width="4" height="2" rx="1"/><line x1="12" y1="18" x2="12" y2="20"/></svg>
+      Brain Dump
+    </div></li>
   </ul>
 </aside>
 
@@ -140,6 +144,20 @@
         </div>
       </div>
       <div class="inspo-grid" id="inspo-grid"></div>
+    </section>
+
+    <!-- BRAIN DUMP -->
+    <section class="section" id="section-braindump">
+      <div class="bd-toolbar">
+        <button class="btn btn-primary btn-sm" onclick="openBrainDumpModal()">+ New Dump</button>
+      </div>
+      <div class="bd-grid" id="bd-grid"></div>
+      <div class="bd-empty" id="bd-empty" style="display:none">
+        <div class="bd-empty-icon">🧠</div>
+        <strong>Nothing dumped yet</strong>
+        <p>Capture ideas, raw thoughts, anything on your mind.</p>
+        <button class="btn btn-primary btn-sm" onclick="openBrainDumpModal()">+ New Dump</button>
+      </div>
     </section>
 
 
@@ -246,6 +264,24 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modal-channel')">Cancel</button>
       <button class="btn btn-primary" id="save-ch-btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Brain Dump modal -->
+<div class="modal-backdrop" id="modal-braindump" style="display:none">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <h3 id="bd-modal-title">New Brain Dump</h3>
+      <button class="modal-close" onclick="closeModal('modal-braindump')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>Title (optional)</label><input id="bd-title" type="text" placeholder="What's on your mind?"/></div>
+      <div class="form-group" style="margin-bottom:0"><label>Dump it all here</label><textarea id="bd-body" placeholder="Raw thoughts, ideas, notes, anything…" style="min-height:180px"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-braindump')">Cancel</button>
+      <button class="btn btn-primary" id="save-bd-btn">Save</button>
     </div>
   </div>
 </div>
