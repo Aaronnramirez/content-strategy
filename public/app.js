@@ -134,6 +134,35 @@ function toggleSidebar(){
 
 function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+// ════════════════ THEMES ════════════════
+const THEME_DOTS = { beige:'#7c5c3b', light:'#4e6fa0', dark:'#2a2a32', lunar:'#5858a0', forest:'#2a6830' };
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme === 'beige' ? '' : theme);
+  localStorage.setItem('cwm-theme', theme);
+  const btn = document.getElementById('theme-current-btn');
+  if (btn) btn.style.background = THEME_DOTS[theme] || THEME_DOTS.beige;
+  document.querySelectorAll('.theme-opt').forEach(el =>
+    el.classList.toggle('active', el.dataset.theme === theme)
+  );
+}
+
+function toggleThemePicker() {
+  document.getElementById('theme-options').classList.toggle('open');
+}
+
+function setTheme(theme) {
+  applyTheme(theme);
+  document.getElementById('theme-options').classList.remove('open');
+}
+
+// Close picker when clicking outside
+document.addEventListener('click', e => {
+  if (!document.getElementById('theme-picker')?.contains(e.target)) {
+    document.getElementById('theme-options')?.classList.remove('open');
+  }
+});
+
 // ════════════════ ACTIONS PANEL ════════════════
 function toggleActions(){
   document.body.classList.toggle('actions-open');
@@ -914,6 +943,7 @@ function setUserInSidebar(email) {
 
 // ════════════════ INIT ════════════════
 async function init() {
+  applyTheme(localStorage.getItem('cwm-theme') || 'beige');
   const token = getToken();
   if (!token) { showAuthScreen(); return; }
   const ok = await load(); if (!ok) return;

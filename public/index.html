@@ -11,7 +11,7 @@
 <!-- SIDEBAR -->
 <aside class="sidebar">
   <div class="sidebar-logo">
-    <h1>Content OS</h1>
+    <h1>Content War Map</h1>
     <p>Strategy Tracker</p>
   </div>
   <div class="sidebar-user" id="sidebar-user" style="display:none">
@@ -51,6 +51,16 @@
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:10px">
+      <div class="theme-picker" id="theme-picker">
+        <button class="theme-current-btn" id="theme-current-btn" onclick="toggleThemePicker()" title="Change theme"></button>
+        <div class="theme-options" id="theme-options">
+          <button class="theme-opt" data-theme="beige"  data-label="Beige"  style="background:#7c5c3b" onclick="setTheme('beige')"></button>
+          <button class="theme-opt" data-theme="light"  data-label="Light"  style="background:#4e6fa0" onclick="setTheme('light')"></button>
+          <button class="theme-opt" data-theme="dark"   data-label="Dark"   style="background:#2a2a32" onclick="setTheme('dark')"></button>
+          <button class="theme-opt" data-theme="lunar"  data-label="Lunar"  style="background:#5858a0" onclick="setTheme('lunar')"></button>
+          <button class="theme-opt" data-theme="forest" data-label="Forest" style="background:#2a6830" onclick="setTheme('forest')"></button>
+        </div>
+      </div>
       <div class="page-actions" id="page-actions">
         <button class="btn btn-ghost btn-sm" onclick="openEventModal(null)">+ Add Content</button>
       </div>
