@@ -135,7 +135,7 @@ function toggleSidebar(){
 function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // ════════════════ THEMES ════════════════
-const THEME_DOTS = { beige:'#7c5c3b', light:'#4e6fa0', dark:'#2a2a32', lunar:'#5858a0', forest:'#2a6830' };
+const THEME_DOTS = { beige:'#7c5c3b', light:'#4e6fa0', dark:'#2a2a32', lunar:'#5858a0' };
 
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme === 'beige' ? '' : theme);

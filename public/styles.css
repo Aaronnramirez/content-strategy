@@ -51,18 +51,6 @@
   --weekend-bg:#dcdce6;
 }
 
-/* ── Forest ── */
-[data-theme="forest"] {
-  --bg:#141e14; --surface:#1c2c1c; --surface2:#243424; --surface3:#2c3e2c;
-  --border:#385038; --border2:#486048;
-  --accent:#72c87a; --accent-bg:#1a2e1a;
-  --accent2:#d07848; --accent3:#90d890; --accent4:#c8b838;
-  --sug:#b878d8;
-  --text:#d4f0d0; --text-muted:#80a87c; --text-dim:#4a6848;
-  --shadow:0 2px 12px rgba(0,0,0,.32);
-  --shadow-lg:0 6px 32px rgba(0,0,0,.48);
-  --weekend-bg:#182418;
-}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);display:flex;height:100vh;overflow:hidden;}
 
