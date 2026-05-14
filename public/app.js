@@ -132,7 +132,6 @@ function renderChannelFilter(){
   const wrap=document.getElementById('channel-filter');
   const list=document.getElementById('channel-filter-list');
   if(!wrap||!list) return;
-  if(!S.channels.length){ wrap.style.display='none'; return; }
   wrap.style.display='block';
   list.innerHTML='';
 
