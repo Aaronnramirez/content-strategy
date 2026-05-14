@@ -673,12 +673,23 @@ function switchInspoType(type) {
   document.getElementById('inspo-modal-title').textContent   = type==='image' ? 'Add Image' : 'Add Link';
 }
 
+function getCustomPlatforms() {
+  const predefined = new Set(PLAT_DEFS.map(p => p.name));
+  return [...new Set(S.inspo.map(i => i.platform).filter(p => p && !predefined.has(p)))];
+}
+
 function buildPlatPills() {
   const row = document.getElementById('plat-pills');
   row.innerHTML = '';
-  PLAT_DEFS.forEach(p => {
+
+  const allPills = [
+    ...PLAT_DEFS,
+    ...getCustomPlatforms().map(name => ({ name, emoji: '🌐', color: '#7a7068', custom: true })),
+  ];
+
+  allPills.forEach(p => {
     const pill = document.createElement('div');
-    pill.className = 'plat-pill' + (selectedPlatform===p.name?' selected':'');
+    pill.className = 'plat-pill' + (selectedPlatform===p.name?' selected':'') + (p.custom?' custom-plat':'');
     pill.textContent = `${p.emoji} ${p.name}`;
     pill.addEventListener('click', () => {
       row.querySelectorAll('.plat-pill').forEach(x=>x.classList.remove('selected'));
