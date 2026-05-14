@@ -1,27 +1,41 @@
-const express  = require('express');
-const path     = require('path');
-const fs       = require('fs');
-const bcrypt   = require('bcryptjs');
-const jwt      = require('jsonwebtoken');
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
+const express        = require('express');
+const path           = require('path');
+const bcrypt         = require('bcryptjs');
+const jwt            = require('jsonwebtoken');
+const { createClient } = require('@supabase/supabase-js');
 
-const app        = express();
-const PORT       = process.env.PORT || 3000;
-const JWT_SECRET  = process.env.JWT_SECRET  || 'cos-dev-secret-change-in-production';
-const ADMIN_KEY   = process.env.ADMIN_KEY   || 'cos-admin';
-const DATA_DIR   = path.join(__dirname, 'data');
-const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const app             = express();
+const PORT            = process.env.PORT            || 3000;
+const JWT_SECRET      = process.env.JWT_SECRET      || 'cos-dev-secret-change-in-production';
+const ADMIN_KEY       = process.env.ADMIN_KEY       || 'cos-admin';
+const SUPABASE_URL    = process.env.SUPABASE_URL;
+const SUPABASE_KEY    = process.env.SUPABASE_SERVICE_KEY;
 
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error('ERROR: SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in .env');
+  process.exit(1);
+}
 
-function readUsers()             { try { return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); } catch { return []; } }
-function writeUsers(users)       { fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2)); }
-function userFile(id)            { return path.join(DATA_DIR, `user_${id}.json`); }
-function readUserData(id)        { try { return JSON.parse(fs.readFileSync(userFile(id), 'utf8')); } catch { return { events:[], buckets:[], channels:[], csv:null, inspo:[], goals:[], goalsOpen:true }; } }
-function writeUserData(id, data) { fs.writeFileSync(userFile(id), JSON.stringify(data, null, 2)); }
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: { persistSession: false },
+});
+
+// Verify tables exist on startup
+async function checkDatabase() {
+  const { error } = await supabase.from('users').select('id').limit(1);
+  if (error && (error.code === '42P01' || error.message?.includes('does not exist'))) {
+    console.error('\n⚠️  Database tables not found!');
+    console.error('Run supabase-schema.sql in your Supabase SQL Editor first.\n');
+    process.exit(1);
+  }
+  console.log('✓ Supabase connected');
+}
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ── Auth middleware ───────────────────────────────────────────────────────────
 function requireAuth(req, res, next) {
   const token = (req.headers.authorization || '').replace('Bearer ', '');
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
@@ -29,59 +43,77 @@ function requireAuth(req, res, next) {
   catch { res.status(401).json({ error: 'Invalid or expired token' }); }
 }
 
+// ── Signup ────────────────────────────────────────────────────────────────────
 app.post('/api/auth/signup', async (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
   if (password.length < 8)  return res.status(400).json({ error: 'Password must be at least 8 characters' });
 
-  const users = readUsers();
-  if (users.find(u => u.email.toLowerCase() === email.toLowerCase()))
-    return res.status(409).json({ error: 'An account with that email already exists' });
+  const { data: existing } = await supabase
+    .from('users').select('id').ilike('email', email).maybeSingle();
+  if (existing) return res.status(409).json({ error: 'An account with that email already exists' });
 
-  const id   = users.length ? Math.max(...users.map(u => u.id)) + 1 : 1;
   const hash = await bcrypt.hash(password, 10);
-  users.push({ id, email: email.toLowerCase(), passwordHash: hash, createdAt: Date.now() });
-  writeUsers(users);
-  writeUserData(id, { events:[], buckets:[], channels:[], csv:null, inspo:[], goals:[], goalsOpen:true });
+  const { data: user, error } = await supabase
+    .from('users')
+    .insert({ email: email.toLowerCase(), password_hash: hash, created_at: Date.now() })
+    .select().single();
 
-  const token = jwt.sign({ userId: id, email: email.toLowerCase() }, JWT_SECRET, { expiresIn: '365d' });
-  res.json({ token, email: email.toLowerCase() });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Failed to create account' }); }
+
+  await supabase.from('user_data').insert({
+    user_id: user.id,
+    data: { events:[], buckets:[], channels:[], csv:null, inspo:[], goals:[], goalsOpen:true },
+  });
+
+  const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '365d' });
+  res.json({ token, email: user.email });
 });
 
+// ── Login ─────────────────────────────────────────────────────────────────────
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
-  const users = readUsers();
-  const user  = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+  const { data: user } = await supabase
+    .from('users').select('*').ilike('email', email).maybeSingle();
   if (!user) return res.status(401).json({ error: 'Invalid email or password' });
 
-  const valid = await bcrypt.compare(password, user.passwordHash);
+  const valid = await bcrypt.compare(password, user.password_hash);
   if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
 
   const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '365d' });
   res.json({ token, email: user.email });
 });
 
+// ── Token refresh ─────────────────────────────────────────────────────────────
 app.get('/api/auth/refresh', requireAuth, (req, res) => {
   const token = jwt.sign({ userId: req.user.userId, email: req.user.email }, JWT_SECRET, { expiresIn: '365d' });
   res.json({ token });
 });
 
-app.get('/api/data', requireAuth, (req, res) => {
-  res.json(readUserData(req.user.userId));
+// ── User data ─────────────────────────────────────────────────────────────────
+app.get('/api/data', requireAuth, async (req, res) => {
+  const { data, error } = await supabase
+    .from('user_data').select('data').eq('user_id', req.user.userId).maybeSingle();
+  if (error) console.error(error);
+  res.json(data?.data || { events:[], buckets:[], channels:[], csv:null, inspo:[], goals:[], goalsOpen:true });
 });
 
-app.post('/api/data', requireAuth, (req, res) => {
-  writeUserData(req.user.userId, req.body);
+app.post('/api/data', requireAuth, async (req, res) => {
+  const { error } = await supabase.from('user_data').upsert({
+    user_id: req.user.userId,
+    data: req.body,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id' });
+  if (error) { console.error(error); return res.status(500).json({ error: 'Failed to save' }); }
   res.json({ ok: true });
 });
 
-// ── Social stats (follower count fetcher) ──
+// ── Social stats ──────────────────────────────────────────────────────────────
 app.get('/api/social-stats', requireAuth, async (req, res) => {
   const { url } = req.query;
   if (!url) return res.status(400).json({ error: 'URL required' });
-
   try {
     const r = await fetch(url, {
       headers: {
@@ -92,7 +124,7 @@ app.get('/api/social-stats', requireAuth, async (req, res) => {
       signal: AbortSignal.timeout(10000),
     });
     if (!r.ok) return res.status(502).json({ error: `Page returned ${r.status}` });
-    const html  = await r.text();
+    const html = await r.text();
     const result = extractFollowerCount(url, html);
     if (result) return res.json(result);
     res.status(422).json({ error: "Couldn't read follower count from this page. Try updating manually." });
@@ -104,33 +136,22 @@ app.get('/api/social-stats', requireAuth, async (req, res) => {
 
 function extractFollowerCount(url, html) {
   const u = url.toLowerCase();
-
-  // YouTube — extracts from ytInitialData embedded JSON
   if (u.includes('youtube.com') || u.includes('youtu.be')) {
     const m = html.match(/"subscriberCountText"\s*:\s*\{\s*"simpleText"\s*:\s*"([^"]+)"/);
-    if (m) {
-      const raw   = m[1].replace(/\s*(subscribers?|followers?)\s*/i, '').trim(); // "2.13M"
-      const count = parseShortNum(raw);
-      return { count, formatted: raw, platform: 'YouTube' };
-    }
+    if (m) { const raw = m[1].replace(/\s*(subscribers?|followers?)\s*/i,'').trim(); return { count: parseShortNum(raw), formatted: raw, platform: 'YouTube' }; }
     return null;
   }
-
-  // Instagram
   if (u.includes('instagram.com')) {
     let m = html.match(/"edge_followed_by"\s*:\s*\{\s*"count"\s*:\s*(\d+)/);
     if (!m) m = html.match(/"followers_count"\s*:\s*(\d+)/);
     if (m) { const count = parseInt(m[1]); return { count, formatted: String(count), platform: 'Instagram' }; }
     return null;
   }
-
-  // TikTok
   if (u.includes('tiktok.com')) {
     const m = html.match(/"followerCount"\s*:\s*(\d+)/);
     if (m) { const count = parseInt(m[1]); return { count, formatted: String(count), platform: 'TikTok' }; }
     return null;
   }
-
   return null;
 }
 
@@ -143,66 +164,53 @@ function parseShortNum(s) {
   return Math.round(n) || 0;
 }
 
-// ── Admin panel ──────────────────────────────────────────────────────────────
-
+// ── Admin panel ───────────────────────────────────────────────────────────────
 function requireAdmin(req, res, next) {
   const key = req.headers['x-admin-key'] || req.query.key;
   if (key !== ADMIN_KEY) return res.status(401).json({ error: 'Invalid admin key' });
   next();
 }
 
-// Serve admin HTML
-app.get('/admin', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
+  const { data } = await supabase.from('users').select('id, email, created_at').order('id');
+  res.json(data || []);
 });
 
-// List all users
-app.get('/api/admin/users', requireAdmin, (req, res) => {
-  const users = readUsers().map(u => ({ id: u.id, email: u.email, createdAt: u.createdAt }));
-  res.json(users);
+app.get('/api/admin/users/:id/data', requireAdmin, async (req, res) => {
+  const { data } = await supabase.from('user_data').select('data').eq('user_id', req.params.id).maybeSingle();
+  res.json(data?.data || {});
 });
 
-// Get any user's data
-app.get('/api/admin/users/:id/data', requireAdmin, (req, res) => {
-  res.json(readUserData(parseInt(req.params.id)));
-});
-
-// Overwrite any user's data
-app.post('/api/admin/users/:id/data', requireAdmin, (req, res) => {
-  writeUserData(parseInt(req.params.id), req.body);
+app.post('/api/admin/users/:id/data', requireAdmin, async (req, res) => {
+  await supabase.from('user_data').upsert({ user_id: parseInt(req.params.id), data: req.body, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
   res.json({ ok: true });
 });
 
-// Issue a token for any user (log in as them)
-app.post('/api/admin/impersonate', requireAdmin, (req, res) => {
+app.post('/api/admin/impersonate', requireAdmin, async (req, res) => {
   const { userId } = req.body || {};
-  const users = readUsers();
-  const user = users.find(u => u.id === parseInt(userId));
+  const { data: user } = await supabase.from('users').select('id, email').eq('id', userId).maybeSingle();
   if (!user) return res.status(404).json({ error: 'User not found' });
   const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '365d' });
   res.json({ token, email: user.email });
 });
 
-// Delete a user account + data
-app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
-  const id = parseInt(req.params.id);
-  let users = readUsers();
-  users = users.filter(u => u.id !== id);
-  writeUsers(users);
-  try { fs.unlinkSync(userFile(id)); } catch {}
+app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
+  await supabase.from('users').delete().eq('id', req.params.id);
   res.json({ ok: true });
 });
 
-// Reset a user's password
 app.post('/api/admin/users/:id/reset-password', requireAdmin, async (req, res) => {
   const { password } = req.body || {};
   if (!password || password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 chars' });
-  const users = readUsers();
-  const user = users.find(u => u.id === parseInt(req.params.id));
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  user.passwordHash = await bcrypt.hash(password, 10);
-  writeUsers(users);
+  const hash = await bcrypt.hash(password, 10);
+  const { error } = await supabase.from('users').update({ password_hash: hash }).eq('id', req.params.id);
+  if (error) return res.status(500).json({ error: 'Failed to reset password' });
   res.json({ ok: true });
 });
 
-app.listen(PORT, () => console.log(`Content Strategy Tracker running at http://localhost:${PORT}`));
+// ── Start ─────────────────────────────────────────────────────────────────────
+checkDatabase().then(() => {
+  app.listen(PORT, () => console.log(`Content Strategy Tracker running at http://localhost:${PORT}`));
+});
