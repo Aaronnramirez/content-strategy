@@ -80,7 +80,7 @@ const TOPBAR_META = {
 const TOPBAR_BTN = {
   calendar:  `<button class="btn btn-ghost btn-sm" onclick="openEventModal(null)">+ Add Content</button>`,
   inspo:     `<button class="btn btn-ghost btn-sm" onclick="openInspoModal('link')">🔗 Link</button><button class="btn btn-primary btn-sm" onclick="openInspoModal('image')">+ Image</button>`,
-  braindump: `<button class="btn btn-primary btn-sm" onclick="openBrainDumpModal()">+ New Dump</button>`,
+  braindump: `<button class="btn btn-primary btn-sm" onclick="openBrainDumpModal()">+ New List</button>`,
 };
 
 document.querySelectorAll('.nav-item').forEach(el=>{
@@ -1058,53 +1058,108 @@ function setUserInSidebar(email) {
 });
 
 // ════════════════ BRAIN DUMP ════════════════
-let _editingBdId = null;
+let _bdDragId = null, _bdDragGroup = null;
 
-function openBrainDumpModal(bd) {
-  _editingBdId = bd ? bd.id : null;
-  document.getElementById('bd-modal-title').textContent = bd ? 'Edit Dump' : 'New Brain Dump';
-  document.getElementById('bd-title').value = bd?.title || '';
-  document.getElementById('bd-body').value  = bd?.body  || '';
+function openBrainDumpModal() {
+  document.getElementById('bd-new-title').value = '';
   openModal('modal-braindump');
-  setTimeout(()=>document.getElementById(bd?.title?'bd-title':'bd-body').focus(), 60);
+  setTimeout(() => document.getElementById('bd-new-title').focus(), 60);
 }
 
 document.getElementById('save-bd-btn').addEventListener('click', () => {
-  const body = document.getElementById('bd-body').value.trim();
-  if (!body) { alert('Please write something first'); return; }
-  const title = document.getElementById('bd-title').value.trim();
-  if (_editingBdId) {
-    const bd = S.braindumps.find(b => b.id === _editingBdId);
-    if (bd) { bd.title = title; bd.body = body; bd.updatedAt = Date.now(); }
-  } else {
-    S.braindumps.unshift({ id: uid(), title, body, createdAt: Date.now() });
-  }
+  const title = document.getElementById('bd-new-title').value.trim();
+  S.braindumps.unshift({ id: uid(), title, items: [], createdAt: Date.now() });
   persist(); closeModal('modal-braindump'); renderBrainDump();
 });
 
-function renderBrainDump() {
-  const grid  = document.getElementById('bd-grid');
-  const empty = document.getElementById('bd-empty');
-  if (!grid) return;
-  if (!S.braindumps.length) { grid.innerHTML = ''; empty.style.display = 'block'; return; }
-  empty.style.display = 'none';
-  grid.innerHTML = S.braindumps.map(bd => `
-    <div class="bd-card">
-      <div class="bd-card-actions">
-        <button class="bd-card-edit" onclick="openBrainDumpModal(S.braindumps.find(b=>b.id==='${bd.id}'))" title="Edit">✏️</button>
-        <button class="bd-card-del" onclick="deleteBrainDump('${bd.id}')" title="Delete">&times;</button>
-      </div>
-      ${bd.title ? `<div class="bd-card-title">${escHtml(bd.title)}</div>` : ''}
-      <div class="bd-card-body">${escHtml(bd.body)}</div>
-      <div class="bd-card-date">${new Date(bd.updatedAt||bd.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
-    </div>
-  `).join('');
+function addBdItem(groupId, inputEl) {
+  const text = inputEl.value.trim();
+  if (!text) return;
+  const bd = S.braindumps.find(b => b.id === groupId);
+  if (!bd) return;
+  bd.items.push({ id: uid(), text });
+  inputEl.value = '';
+  persist();
+  renderBdGroup(bd);
+}
+
+function deleteBdItem(groupId, itemId) {
+  const bd = S.braindumps.find(b => b.id === groupId);
+  if (!bd) return;
+  bd.items = bd.items.filter(i => i.id !== itemId);
+  persist(); renderBdGroup(bd);
 }
 
 function deleteBrainDump(id) {
-  if (!confirm('Delete this dump?')) return;
+  if (!confirm('Delete this list?')) return;
   S.braindumps = S.braindumps.filter(b => b.id !== id);
   persist(); renderBrainDump();
+}
+
+function renderBdGroup(bd) {
+  const el = document.getElementById('bdg-' + bd.id);
+  if (!el) { renderBrainDump(); return; }
+  const itemsEl = el.querySelector('.bd-items');
+  itemsEl.innerHTML = '';
+  bd.items.forEach((item, idx) => {
+    const row = document.createElement('div');
+    row.className = 'bd-item';
+    row.draggable = true;
+    row.dataset.id = item.id;
+    row.innerHTML = `
+      <span class="bd-rank">${idx + 1}</span>
+      <span class="bd-drag-handle">⠿</span>
+      <span class="bd-item-text">${escHtml(item.text)}</span>
+      <button class="bd-item-del" title="Remove">&times;</button>`;
+    row.querySelector('.bd-item-del').addEventListener('click', () => deleteBdItem(bd.id, item.id));
+    // Drag events
+    row.addEventListener('dragstart', e => {
+      _bdDragId = item.id; _bdDragGroup = bd.id;
+      e.dataTransfer.effectAllowed = 'move';
+      row.classList.add('bd-dragging');
+    });
+    row.addEventListener('dragend', () => row.classList.remove('bd-dragging'));
+    row.addEventListener('dragover', e => { e.preventDefault(); row.classList.add('bd-drag-over'); });
+    row.addEventListener('dragleave', () => row.classList.remove('bd-drag-over'));
+    row.addEventListener('drop', e => {
+      e.preventDefault(); row.classList.remove('bd-drag-over');
+      if (_bdDragId === item.id || _bdDragGroup !== bd.id) return;
+      const fromIdx = bd.items.findIndex(i => i.id === _bdDragId);
+      const toIdx   = idx;
+      const [moved] = bd.items.splice(fromIdx, 1);
+      bd.items.splice(toIdx, 0, moved);
+      persist(); renderBdGroup(bd);
+    });
+    itemsEl.appendChild(row);
+  });
+}
+
+function renderBrainDump() {
+  const container = document.getElementById('bd-grid');
+  const empty     = document.getElementById('bd-empty');
+  if (!container) return;
+  if (!S.braindumps.length) { container.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  container.innerHTML = '';
+  S.braindumps.forEach(bd => {
+    const card = document.createElement('div');
+    card.className = 'bd-group';
+    card.id = 'bdg-' + bd.id;
+    card.innerHTML = `
+      <div class="bd-group-header">
+        <span class="bd-group-title">${escHtml(bd.title || 'Untitled')}</span>
+        <button class="bd-group-del" title="Delete list">&times;</button>
+      </div>
+      <div class="bd-items"></div>
+      <div class="bd-input-wrap">
+        <input class="bd-item-input" type="text" placeholder="Type an idea and press Enter…"/>
+      </div>`;
+    card.querySelector('.bd-group-del').addEventListener('click', () => deleteBrainDump(bd.id));
+    const inp = card.querySelector('.bd-item-input');
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addBdItem(bd.id, inp); } });
+    container.appendChild(card);
+    renderBdGroup(bd);
+  });
 }
 
 // ════════════════ INIT ════════════════

@@ -148,15 +148,12 @@
 
     <!-- BRAIN DUMP -->
     <section class="section" id="section-braindump">
-      <div class="bd-toolbar">
-        <button class="btn btn-primary btn-sm" onclick="openBrainDumpModal()">+ New Dump</button>
-      </div>
       <div class="bd-grid" id="bd-grid"></div>
       <div class="bd-empty" id="bd-empty" style="display:none">
         <div class="bd-empty-icon">🧠</div>
-        <strong>Nothing dumped yet</strong>
-        <p>Capture ideas, raw thoughts, anything on your mind.</p>
-        <button class="btn btn-primary btn-sm" onclick="openBrainDumpModal()">+ New Dump</button>
+        <strong>Nothing here yet</strong>
+        <p>Create a list and rank your ideas from best to last.</p>
+        <button class="btn btn-primary btn-sm" onclick="openBrainDumpModal()">+ New List</button>
       </div>
     </section>
 
@@ -270,18 +267,20 @@
 
 <!-- Brain Dump modal -->
 <div class="modal-backdrop" id="modal-braindump" style="display:none">
-  <div class="modal" style="max-width:560px">
+  <div class="modal" style="max-width:420px">
     <div class="modal-header">
-      <h3 id="bd-modal-title">New Brain Dump</h3>
+      <h3>New List</h3>
       <button class="modal-close" onclick="closeModal('modal-braindump')">&times;</button>
     </div>
     <div class="modal-body">
-      <div class="form-group"><label>Title (optional)</label><input id="bd-title" type="text" placeholder="What's on your mind?"/></div>
-      <div class="form-group" style="margin-bottom:0"><label>Dump it all here</label><textarea id="bd-body" placeholder="Raw thoughts, ideas, notes, anything…" style="min-height:180px"></textarea></div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>List title</label>
+        <input id="bd-new-title" type="text" placeholder="Video ideas, monetization, etc"/>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modal-braindump')">Cancel</button>
-      <button class="btn btn-primary" id="save-bd-btn">Save</button>
+      <button class="btn btn-primary" id="save-bd-btn">Create List</button>
     </div>
   </div>
 </div>
