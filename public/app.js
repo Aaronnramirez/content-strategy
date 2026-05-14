@@ -103,11 +103,12 @@ function closeModal(id) { document.getElementById(id).style.display='none'; }
 document.querySelectorAll('.modal-backdrop').forEach(m=>{
   m.addEventListener('click',e=>{ if(e.target===m) m.style.display='none'; });
 });
-function buildColors(id){
+function buildColors(id, preselect){
   const row=document.getElementById(id); row.innerHTML='';
   PALETTE.forEach((c,i)=>{
     const d=document.createElement('div');
-    d.className='swatch'+(i===0?' selected':''); d.style.background=c; d.dataset.color=c;
+    const sel=preselect?c===preselect:i===0;
+    d.className='swatch'+(sel?' selected':''); d.style.background=c; d.dataset.color=c;
     d.addEventListener('click',()=>{ row.querySelectorAll('.swatch').forEach(s=>s.classList.remove('selected')); d.classList.add('selected'); });
     row.appendChild(d);
   });
@@ -128,11 +129,21 @@ function renderCalendar(){
   }
 }
 
+function toggleChannelFilter(){
+  const list=document.getElementById('channel-filter-list');
+  const chevron=document.getElementById('channel-filter-chevron');
+  const open=list.style.display==='none';
+  list.style.display=open?'flex':'none';
+  chevron.classList.toggle('open',open);
+}
+
 function renderChannelFilter(){
   const wrap=document.getElementById('channel-filter');
   const list=document.getElementById('channel-filter-list');
   if(!wrap||!list) return;
   wrap.style.display='block';
+  // Preserve open/closed state
+  const isOpen=list.style.display!=='none';
   list.innerHTML='';
 
   // ALL button
@@ -150,6 +161,11 @@ function renderChannelFilter(){
     btn.onclick=()=>{ activeChannelFilter=ch.id; renderChannelFilter(); renderCalendar(); };
     list.appendChild(btn);
   });
+
+  // Restore open/closed state (default closed)
+  list.style.display=isOpen?'flex':'none';
+  const chevron=document.getElementById('channel-filter-chevron');
+  if(chevron) chevron.classList.toggle('open',isOpen);
 }
 function toggleSidebar(){
   document.body.classList.toggle('sidebar-hidden');
@@ -477,9 +493,64 @@ function renderBuckets(){
 function openBucketModal(){document.getElementById('bk-name').value='';document.getElementById('bk-desc').value='';buildColors('bk-colors');openModal('modal-bucket');setTimeout(()=>document.getElementById('bk-name').focus(),60);}
 document.getElementById('save-bucket-btn').addEventListener('click',()=>{const name=document.getElementById('bk-name').value.trim();if(!name){alert('Please enter a name');return;}S.buckets.push({id:uid(),name,color:pickedColor('bk-colors'),desc:document.getElementById('bk-desc').value.trim(),createdAt:Date.now()});activeBucket=S.buckets[S.buckets.length-1].id;persist();closeModal('modal-bucket');renderBuckets();});
 function openBucketItemModal(bucketId){const bk=S.buckets.find(b=>b.id===bucketId);document.getElementById('bi-modal-title').textContent=`Add to "${bk?.name||'Bucket'}"`;document.getElementById('bi-title').value='';document.getElementById('bi-notes').value='';document.getElementById('bi-date').value='';document.getElementById('bi-status').value='idea';fillSelect('bi-channel',S.channels,c=>({v:c.id,t:`${c.icon||'📡'} ${c.name}`}));document.getElementById('save-bi-btn').onclick=()=>{const title=document.getElementById('bi-title').value.trim();if(!title){alert('Please enter a title');return;}S.events.push({id:uid(),title,bucketId,channelId:document.getElementById('bi-channel').value,date:document.getElementById('bi-date').value,status:document.getElementById('bi-status').value,notes:document.getElementById('bi-notes').value.trim(),createdAt:Date.now()});persist();closeModal('modal-bi');renderBuckets();};openModal('modal-bi');setTimeout(()=>document.getElementById('bi-title').focus(),60);}
-function renderChannels(){const list=document.getElementById('channels-list'),empty=document.getElementById('channels-empty');list.innerHTML='';if(!S.channels.length){list.style.display='none';empty.style.display='block';return;}list.style.display='flex';empty.style.display='none';S.channels.forEach(ch=>{const count=S.events.filter(e=>e.channelId===ch.id).length;const card=document.createElement('div');card.className='channel-card';card.style.borderLeft=`3px solid ${ch.color}`;card.innerHTML=`<button class="ch-del">&times;</button><div class="channel-card-top"><div class="ch-icon" style="background:${ch.color}18;color:${ch.color}">${ch.icon||'📡'}</div><div><div class="ch-name">${ch.name}</div>${ch.handle?`<div class="ch-handle">${ch.handle}</div>`:''}</div></div>${(ch.followers||ch.freq||count)?`<div class="ch-stats">${ch.followers?`<div class="ch-stat"><strong>${ch.followers}</strong><span>Followers</span></div>`:''} ${ch.freq?`<div class="ch-stat"><strong>${ch.freq}</strong><span>Frequency</span></div>`:''}<div class="ch-stat"><strong>${count}</strong><span>Pieces</span></div></div>`:''} ${ch.notes?`<div class="ch-notes">${ch.notes}</div>`:''}`;card.querySelector('.ch-del').addEventListener('click',()=>{if(!confirm(`Remove "${ch.name}"?`))return;S.channels=S.channels.filter(c=>c.id!==ch.id);persist();renderChannels();});list.appendChild(card);});}
-function openChannelModal(){['ch-name','ch-handle','ch-followers','ch-freq','ch-notes'].forEach(id=>document.getElementById(id).value='');document.getElementById('ch-icon').value='';buildColors('ch-colors');openModal('modal-channel');setTimeout(()=>document.getElementById('ch-name').focus(),60);}
-document.getElementById('save-ch-btn').addEventListener('click',()=>{const name=document.getElementById('ch-name').value.trim();if(!name){alert('Please enter a channel name');return;}S.channels.push({id:uid(),name,icon:document.getElementById('ch-icon').value.trim()||'📡',handle:document.getElementById('ch-handle').value.trim(),color:pickedColor('ch-colors'),followers:document.getElementById('ch-followers').value.trim(),freq:document.getElementById('ch-freq').value.trim(),notes:document.getElementById('ch-notes').value.trim(),createdAt:Date.now()});persist();closeModal('modal-channel');renderChannels();});
+function renderChannels(){
+  const list=document.getElementById('channels-list'),empty=document.getElementById('channels-empty');
+  list.innerHTML='';
+  if(!S.channels.length){list.style.display='none';empty.style.display='block';return;}
+  list.style.display='flex';empty.style.display='none';
+  S.channels.forEach(ch=>{
+    const count=S.events.filter(e=>e.channelId===ch.id).length;
+    const card=document.createElement('div');
+    card.className='channel-card';
+    card.style.borderLeft=`3px solid ${ch.color}`;
+    card.innerHTML=`
+      <button class="ch-edit" title="Edit">✏️</button>
+      <button class="ch-del" title="Delete">&times;</button>
+      <div class="channel-card-top">
+        <div class="ch-icon" style="background:${ch.color}18;color:${ch.color}">${ch.icon||'📡'}</div>
+        <div><div class="ch-name">${ch.name}</div>${ch.handle?`<div class="ch-handle">${ch.handle}</div>`:''}</div>
+      </div>
+      ${(ch.followers||ch.freq||count)?`<div class="ch-stats">
+        ${ch.followers?`<div class="ch-stat"><strong>${ch.followers}</strong><span>Followers</span></div>`:''}
+        ${ch.freq?`<div class="ch-stat"><strong>${ch.freq}</strong><span>Frequency</span></div>`:''}
+        <div class="ch-stat"><strong>${count}</strong><span>Pieces</span></div>
+      </div>`:''}
+      ${ch.notes?`<div class="ch-notes">${ch.notes}</div>`:''}`;
+    card.querySelector('.ch-edit').addEventListener('click',()=>openChannelModal(ch));
+    card.querySelector('.ch-del').addEventListener('click',()=>{
+      if(!confirm(`Remove "${ch.name}"?`))return;
+      S.channels=S.channels.filter(c=>c.id!==ch.id);
+      persist();renderChannels();renderChannelFilter();
+    });
+    list.appendChild(card);
+  });
+}
+let _editingChannelId = null;
+function openChannelModal(ch){
+  _editingChannelId = ch ? ch.id : null;
+  document.getElementById('ch-modal-title').textContent = ch ? 'Edit Channel' : 'Add Channel';
+  document.getElementById('ch-name').value    = ch?.name    || '';
+  document.getElementById('ch-icon').value    = ch?.icon    || '';
+  document.getElementById('ch-handle').value  = ch?.handle  || '';
+  document.getElementById('ch-followers').value = ch?.followers || '';
+  document.getElementById('ch-freq').value    = ch?.freq    || '';
+  document.getElementById('ch-notes').value   = ch?.notes   || '';
+  buildColors('ch-colors', ch?.color);
+  openModal('modal-channel');
+  setTimeout(()=>document.getElementById('ch-name').focus(),60);
+}
+document.getElementById('save-ch-btn').addEventListener('click',()=>{
+  const name=document.getElementById('ch-name').value.trim();
+  if(!name){alert('Please enter a channel name');return;}
+  const data={name,icon:document.getElementById('ch-icon').value.trim()||'📡',handle:document.getElementById('ch-handle').value.trim(),color:pickedColor('ch-colors'),followers:document.getElementById('ch-followers').value.trim(),freq:document.getElementById('ch-freq').value.trim(),notes:document.getElementById('ch-notes').value.trim()};
+  if(_editingChannelId){
+    const ch=S.channels.find(c=>c.id===_editingChannelId);
+    if(ch) Object.assign(ch,data);
+  } else {
+    S.channels.push({id:uid(),...data,createdAt:Date.now()});
+  }
+  persist();closeModal('modal-channel');renderChannels();renderChannelFilter();
+});
 
 // ════════════════════════════════════════
 // INSPO BOARD

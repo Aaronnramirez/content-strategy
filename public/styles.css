@@ -167,6 +167,8 @@ body.sidebar-hidden .sidebar{width:0;min-width:0;padding:0;opacity:0;border-righ
 .ch-notes{font-size:12px;color:var(--text-muted);line-height:1.6;}
 .ch-del{position:absolute;top:10px;right:10px;background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px;padding:2px 5px;border-radius:3px;line-height:1;}
 .ch-del:hover{color:var(--accent2);background:#f8ede8;}
+.ch-edit{position:absolute;top:10px;right:34px;background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:13px;padding:2px 5px;border-radius:3px;line-height:1;}
+.ch-edit:hover{color:var(--accent);background:var(--accent-bg);}
 
 /* ════════════════ INSPO BOARD ════════════════ */
 .inspo-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;gap:12px;flex-wrap:wrap;}
@@ -401,7 +403,10 @@ body.sidebar-hidden .sidebar{width:0;min-width:0;padding:0;opacity:0;border-righ
 
 /* ── Channel filter ── */
 .channel-filter{padding:10px 10px 4px;border-bottom:1px solid var(--border);}
-.channel-filter-label{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--text-dim);padding:0 4px;margin-bottom:6px;}
+.channel-filter-label{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--text-dim);padding:0 4px;margin-bottom:6px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none;}
+.channel-filter-label:hover{color:var(--text-muted);}
+.channel-filter-chevron{font-size:10px;transition:transform .18s;}
+.channel-filter-chevron.open{transform:rotate(180deg);}
 .channel-filter-list{display:flex;flex-direction:column;gap:2px;}
 .ch-filter-btn{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--radius-sm);border:none;background:transparent;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:500;color:var(--text-muted);width:100%;text-align:left;transition:background .12s,color .12s;}
 .ch-filter-btn:hover{background:var(--surface2);color:var(--text);}
