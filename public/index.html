@@ -50,8 +50,13 @@
         <p id="topbar-sub">Your content schedule — current month through the next 6</p>
       </div>
     </div>
-    <div class="page-actions" id="page-actions">
-      <button class="btn btn-primary btn-sm" onclick="openEventModal(null)">+ Add Content</button>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="page-actions" id="page-actions">
+        <button class="btn btn-primary btn-sm" onclick="openEventModal(null)">+ Add Content</button>
+      </div>
+      <button class="actions-toggle-btn" id="actions-toggle-btn" onclick="toggleActions()" title="Toggle actions panel">
+        <span id="actions-toggle-icon">◀</span>
+      </button>
     </div>
   </div>
 
@@ -369,6 +374,18 @@
     <p class="auth-footer" id="auth-footer-text">Don't have an account? <span class="auth-switch" onclick="switchAuthTab('signup')">Create one free</span></p>
   </div>
 </div>
+
+<!-- ACTIONS PANEL -->
+<aside class="actions-panel" id="actions-panel">
+  <div class="actions-header">
+    <span class="actions-title">Actions</span>
+    <button class="actions-plus-btn" id="actions-plus-btn" onclick="openActionInput()" title="Add action">+</button>
+  </div>
+  <div class="actions-add-wrap" id="actions-add-wrap">
+    <input class="actions-input" id="actions-input" type="text" placeholder="What needs to be done…" maxlength="120"/>
+  </div>
+  <div class="actions-list" id="actions-list"></div>
+</aside>
 
 <script src="app.js"></script>
 </body>

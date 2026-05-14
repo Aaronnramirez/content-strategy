@@ -132,6 +132,84 @@ function toggleSidebar(){
   document.getElementById('sidebar-toggle-icon').textContent=hidden?'▶':'◀';
 }
 
+function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ════════════════ ACTIONS PANEL ════════════════
+function toggleActions(){
+  document.body.classList.toggle('actions-open');
+  const open=document.body.classList.contains('actions-open');
+  document.getElementById('actions-toggle-icon').textContent=open?'▶':'◀';
+  if(open) renderActions();
+}
+
+function openActionInput(){
+  const wrap=document.getElementById('actions-add-wrap');
+  wrap.classList.toggle('open');
+  if(wrap.classList.contains('open')){
+    const inp=document.getElementById('actions-input');
+    inp.value='';
+    inp.focus();
+  }
+}
+
+function addAction(title){
+  if(!title.trim()) return;
+  const today=new Date();
+  const ds=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const ev={
+    id: Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+    title: title.trim(),
+    date: ds,
+    status:'idea',
+    isAction: true,
+    channel: S.channels[0]?.name || '',
+    bucket: '',
+    notes: '',
+  };
+  S.events.push(ev);
+  persist();
+  document.getElementById('actions-input').value='';
+  document.getElementById('actions-add-wrap').classList.remove('open');
+  renderCalendar();
+  renderActions();
+}
+
+function completeAction(id){
+  S.events=S.events.filter(e=>e.id!==id);
+  persist();
+  renderCalendar();
+  renderActions();
+}
+
+function renderActions(){
+  const list=document.getElementById('actions-list');
+  if(!list) return;
+  const today=new Date();
+  const ds=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const actions=S.events.filter(e=>e.isAction && e.date===ds);
+  if(!actions.length){
+    list.innerHTML='<div class="actions-empty">No actions for today</div>';
+    return;
+  }
+  list.innerHTML=actions.map(ev=>`
+    <div class="actions-item" id="action-item-${ev.id}">
+      <span class="actions-item-label">${escHtml(ev.title)}</span>
+      <button class="actions-check-btn" onclick="completeAction('${ev.id}')" title="Mark done">✓</button>
+    </div>
+  `).join('');
+}
+
+// Wire up the actions input: Enter to submit
+document.addEventListener('DOMContentLoaded', ()=>{
+  const inp=document.getElementById('actions-input');
+  if(inp) inp.addEventListener('keydown', e=>{
+    if(e.key==='Enter') addAction(inp.value);
+    if(e.key==='Escape'){
+      document.getElementById('actions-add-wrap').classList.remove('open');
+    }
+  });
+});
+
 function toggleAmounts(){
   amountsHidden=!amountsHidden;
   document.querySelectorAll('.month-spon-amount').forEach(el=>el.classList.toggle('hidden',amountsHidden));
@@ -843,6 +921,6 @@ async function init() {
     setUserInSidebar(payload.email);
   } catch {}
   refreshToken(); // extend session in background
-  renderCalendar(); renderGoals(); renderSponsoredTotal();
+  renderCalendar(); renderGoals(); renderSponsoredTotal(); renderActions();
 }
 init();
