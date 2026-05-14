@@ -332,7 +332,10 @@ function openDetail(id){
   const ev=S.events.find(e=>e.id===id); if(!ev) return;
   const bk=S.buckets.find(b=>b.id===ev.bucketId), ch=S.channels.find(c=>c.id===ev.channelId);
 
-  document.getElementById('detail-title-text').textContent=ev.title;
+  const titleInput=document.getElementById('detail-title-text');
+  titleInput.value=ev.title;
+  titleInput.onblur=()=>{ const v=titleInput.value.trim(); if(v&&v!==ev.title){ev.title=v;persist();renderCalendar();} };
+  titleInput.onkeydown=e=>{ if(e.key==='Enter'){titleInput.blur();} if(e.key==='Escape'){titleInput.value=ev.title;titleInput.blur();} };
 
   const statuses=['idea','scripting','recording','editing','scheduled','published'];
   const statusPills=statuses.map(s=>{
