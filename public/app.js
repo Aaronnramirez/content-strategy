@@ -334,8 +334,22 @@ function openDetail(id){
 
   const titleInput=document.getElementById('detail-title-text');
   titleInput.value=ev.title;
-  titleInput.onblur=()=>{ const v=titleInput.value.trim(); if(v&&v!==ev.title){ev.title=v;persist();renderCalendar();} };
-  titleInput.onkeydown=e=>{ if(e.key==='Enter'){titleInput.blur();} if(e.key==='Escape'){titleInput.value=ev.title;titleInput.blur();} };
+  titleInput.readOnly=true;
+  titleInput.onclick=()=>{
+    if(!titleInput.readOnly) return;
+    titleInput.readOnly=false;
+    titleInput.select();
+  };
+  titleInput.onblur=()=>{
+    const v=titleInput.value.trim();
+    if(v&&v!==ev.title){ev.title=v;persist();renderCalendar();}
+    else if(!v){titleInput.value=ev.title;}
+    titleInput.readOnly=true;
+  };
+  titleInput.onkeydown=e=>{
+    if(e.key==='Enter'){titleInput.blur();}
+    if(e.key==='Escape'){titleInput.value=ev.title;titleInput.blur();}
+  };
 
   const statuses=['idea','scripting','recording','editing','scheduled','published'];
   const statusPills=statuses.map(s=>{

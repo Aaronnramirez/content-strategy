@@ -466,9 +466,9 @@ tr:hover td{background:var(--surface2);}
 @keyframes pop{from{opacity:0;transform:scale(.96) translateY(6px);}to{opacity:1;transform:none;}}
 .modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;}
 .modal-header h3{font-size:15px;font-weight:800;}
-.detail-title-input{flex:1;font-size:15px;font-weight:800;font-family:inherit;color:var(--text);background:transparent;border:none;outline:none;border-radius:5px;padding:3px 6px;margin-left:-6px;transition:background .14s;}
-.detail-title-input:hover{background:var(--surface2);}
-.detail-title-input:focus{background:var(--surface2);}
+.detail-title-input{flex:1;font-size:15px;font-weight:800;font-family:inherit;color:var(--text);background:transparent;border:none;outline:none;border-radius:5px;padding:3px 6px;margin-left:-6px;transition:background .14s;cursor:default;}
+.detail-title-input[readonly]:hover{background:var(--surface2);cursor:text;}
+.detail-title-input:not([readonly]){background:var(--surface2);cursor:text;}
 .modal-close{background:none;border:none;color:var(--text-muted);font-size:21px;cursor:pointer;line-height:1;padding:0 3px;}
 .modal-close:hover{color:var(--text);}
 .modal-body{padding:18px 20px;}
