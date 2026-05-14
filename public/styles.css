@@ -636,3 +636,194 @@ body.actions-open .actions-panel { width:230px;min-width:230px;opacity:1; }
 .theme-opt.active { border-color:var(--text); }
 .theme-opt::after { content:attr(data-label);position:absolute;right:calc(100% + 8px);top:50%;transform:translateY(-50%);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:2px 7px;font-size:11px;font-weight:600;color:var(--text-muted);white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s; }
 .theme-opt:hover::after { opacity:1; }
+
+/* ══════════════════════════════════════════
+   LIQUID GLASS OVERRIDE
+   Remove this block to revert to flat design
+══════════════════════════════════════════ */
+
+/* Rich gradient body + ambient colour blobs */
+body {
+  background: linear-gradient(145deg, #e8ddd2 0%, #d6c9b8 30%, #dfd4c4 60%, #c9bcab 100%);
+  min-height: 100vh;
+}
+body::before {
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(ellipse 55% 45% at 15% 15%, rgba(124,92,59,.20) 0%, transparent 65%),
+    radial-gradient(ellipse 45% 55% at 85% 85%, rgba(78,128,96,.14) 0%, transparent 65%),
+    radial-gradient(ellipse 40% 40% at 75% 10%, rgba(184,124,26,.10) 0%, transparent 60%);
+}
+
+/* Ensure stacking context sits above blobs */
+.sidebar, .main, .actions-panel { position: relative; z-index: 1; }
+
+/* ── Glass mixin values ── */
+:root {
+  --glass-bg: rgba(248,244,238,0.52);
+  --glass-border: rgba(255,255,255,0.55);
+  --glass-shadow: 0 8px 32px rgba(100,80,60,.13), inset 0 1px 0 rgba(255,255,255,.65);
+  --glass-blur: blur(22px) saturate(180%);
+  --radius: 14px;
+  --radius-sm: 9px;
+}
+
+/* Sidebar */
+.sidebar {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-right: 1px solid var(--glass-border);
+  box-shadow: 4px 0 28px rgba(100,80,60,.09), inset -1px 0 0 rgba(255,255,255,.4);
+}
+
+/* Topbar */
+.topbar {
+  background: rgba(248,244,238,0.58);
+  backdrop-filter: blur(20px) saturate(170%);
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: 0 1px 0 rgba(255,255,255,.5), 0 4px 20px rgba(100,80,60,.06);
+}
+
+/* Calendar grid */
+.cal-grid {
+  background: rgba(248,244,238,.40);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 36px rgba(100,80,60,.11), inset 0 1px 0 rgba(255,255,255,.6);
+}
+.cal-day {
+  background: rgba(248,244,238,.30);
+}
+.cal-day:hover { background: rgba(240,230,216,.55); }
+.cal-day.other-month { background: rgba(225,218,208,.20); }
+.cal-day.weekend { background: rgba(235,228,218,.38); }
+.cal-day.weekend.other-month { background: rgba(218,210,200,.18); }
+
+/* Goals */
+.goals-section {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+.goals-toggle { background: rgba(238,233,224,.50); }
+
+/* Actions panel */
+.actions-panel {
+  background: rgba(248,244,238,.52);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-left: 1px solid var(--glass-border);
+  box-shadow: -4px 0 28px rgba(100,80,60,.09), inset 1px 0 0 rgba(255,255,255,.4);
+}
+.actions-header { background: rgba(238,233,224,.45); }
+.actions-add-wrap { background: transparent; }
+
+/* Board panels */
+.panel-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+.panel-header { background: rgba(238,233,224,.50); }
+.bucket-tab.active { background: rgba(248,244,238,.75); }
+
+/* Inspo cards */
+.inspo-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+/* Brain dump groups */
+.bd-group {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+.bd-group-header { background: rgba(238,233,224,.50); }
+.bd-item { background: rgba(248,244,238,.25); }
+.bd-item:hover { background: rgba(240,230,216,.50); }
+
+/* Modals */
+.modal {
+  background: rgba(248,244,238,.80);
+  backdrop-filter: blur(36px) saturate(200%);
+  -webkit-backdrop-filter: blur(36px) saturate(200%);
+  border: 1px solid rgba(255,255,255,.70);
+  box-shadow: 0 20px 60px rgba(100,80,60,.22), inset 0 1px 0 rgba(255,255,255,.75);
+}
+.modal-backdrop { background: rgba(180,165,148,.35); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+.modal-header { background: rgba(238,233,224,.50); border-bottom-color: rgba(255,255,255,.45); }
+.modal-footer { background: rgba(238,233,224,.35); border-top-color: rgba(255,255,255,.45); }
+
+/* Primary button — glass tint */
+.btn-primary {
+  background: rgba(124,92,59,.82);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,.25);
+  box-shadow: 0 2px 10px rgba(124,92,59,.30), inset 0 1px 0 rgba(255,255,255,.22);
+}
+.btn-ghost {
+  background: rgba(255,255,255,.35);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,.50);
+}
+.btn-ghost:hover { background: rgba(255,255,255,.55); }
+
+/* Nav active */
+.nav-item.active {
+  background: rgba(124,92,59,.82);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,.20);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
+}
+
+/* Sidebar toggle & actions toggle */
+.sidebar-toggle-btn, .actions-toggle-btn {
+  background: rgba(255,255,255,.35);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,.55);
+}
+
+/* Channel filter */
+.channel-filter { background: rgba(238,233,224,.35); }
+
+/* Goal cards */
+.goal-card {
+  background: rgba(255,255,255,.30);
+  border: 1px solid rgba(255,255,255,.50);
+}
+.goal-add-card {
+  background: rgba(255,255,255,.20);
+  border: 1.5px dashed rgba(124,92,59,.25);
+}
+
+/* Theme picker dropdown */
+.theme-options {
+  background: rgba(248,244,238,.85);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255,255,255,.60);
+  box-shadow: 0 8px 32px rgba(100,80,60,.18), inset 0 1px 0 rgba(255,255,255,.65);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(124,92,59,.22); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(124,92,59,.38); }
