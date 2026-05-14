@@ -430,9 +430,13 @@
 <aside class="actions-panel" id="actions-panel">
   <div class="actions-header">
     <span class="actions-title">Actions</span>
-    <button class="actions-plus-btn" id="actions-plus-btn" onclick="openActionInput()" title="Add action">+</button>
+    <svg class="actions-progress-ring" id="actions-progress-ring" viewBox="0 0 44 44" style="display:none">
+      <circle class="apr-bg" cx="22" cy="22" r="18"/>
+      <circle class="apr-fill" id="apr-fill" cx="22" cy="22" r="18"/>
+      <text class="apr-text" id="apr-text" x="22" y="26">0%</text>
+    </svg>
   </div>
-  <div class="actions-add-wrap" id="actions-add-wrap">
+  <div class="actions-add-wrap">
     <input class="actions-input" id="actions-input" type="text" placeholder="What needs to be done…" maxlength="120"/>
   </div>
   <div class="actions-list" id="actions-list"></div>

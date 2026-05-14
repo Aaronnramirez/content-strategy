@@ -212,17 +212,7 @@ function toggleActions(){
   document.body.classList.toggle('actions-open');
   const open=document.body.classList.contains('actions-open');
   document.getElementById('actions-toggle-icon').textContent=open?'▶':'◀';
-  if(open) renderActions();
-}
-
-function openActionInput(){
-  const wrap=document.getElementById('actions-add-wrap');
-  wrap.classList.toggle('open');
-  if(wrap.classList.contains('open')){
-    const inp=document.getElementById('actions-input');
-    inp.value='';
-    inp.focus();
-  }
+  if(open){ renderActions(); setTimeout(()=>document.getElementById('actions-input')?.focus(),180); }
 }
 
 function addAction(title){
@@ -235,23 +225,40 @@ function addAction(title){
     date: ds,
     status:'idea',
     isAction: true,
-    channel: S.channels[0]?.name || '',
-    bucket: '',
-    notes: '',
+    actionDone: false,
+    channel:'', bucket:'', notes:'',
   };
   S.events.push(ev);
   persist();
   document.getElementById('actions-input').value='';
-  document.getElementById('actions-add-wrap').classList.remove('open');
   renderCalendar();
   renderActions();
 }
 
 function completeAction(id){
-  S.events=S.events.filter(e=>e.id!==id);
+  const ev=S.events.find(e=>e.id===id);
+  if(!ev) return;
+  ev.actionDone=true;
   persist();
-  renderCalendar();
-  renderActions();
+  // Fade out the item first, then re-render
+  const el=document.getElementById('action-item-'+id);
+  if(el) el.classList.add('done');
+  setTimeout(()=>{ renderCalendar(); renderActions(); }, 350);
+}
+
+function renderActionRing(done, total){
+  const ring=document.getElementById('actions-progress-ring');
+  const fill=document.getElementById('apr-fill');
+  const txt=document.getElementById('apr-text');
+  if(!ring) return;
+  if(!total){ ring.style.display='none'; return; }
+  ring.style.display='block';
+  const pct=Math.round((done/total)*100);
+  const circ=2*Math.PI*18; // r=18 → ~113.1
+  const dash=Math.max(0,(done/total)*circ);
+  // Small delay so the transition animates in
+  requestAnimationFrame(()=>{ fill.style.strokeDasharray=`${dash} ${circ}`; });
+  txt.textContent=`${pct}%`;
 }
 
 function renderActions(){
@@ -260,14 +267,18 @@ function renderActions(){
   const today=new Date();
   const ds=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
   const actions=S.events.filter(e=>e.isAction && e.date===ds);
+  const done=actions.filter(e=>e.actionDone).length;
+  renderActionRing(done, actions.length);
   if(!actions.length){
     list.innerHTML='<div class="actions-empty">No actions for today</div>';
     return;
   }
-  list.innerHTML=actions.map(ev=>`
-    <div class="actions-item" id="action-item-${ev.id}">
+  // Show active first, then completed
+  const sorted=[...actions.filter(e=>!e.actionDone),...actions.filter(e=>e.actionDone)];
+  list.innerHTML=sorted.map(ev=>`
+    <div class="actions-item${ev.actionDone?' done':''}" id="action-item-${ev.id}">
       <span class="actions-item-label">${escHtml(ev.title)}</span>
-      <button class="actions-check-btn" onclick="completeAction('${ev.id}')" title="Mark done">✓</button>
+      ${!ev.actionDone?`<button class="actions-check-btn" onclick="completeAction('${ev.id}')" title="Mark done">✓</button>`:''}
     </div>
   `).join('');
 }
@@ -277,9 +288,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const inp=document.getElementById('actions-input');
   if(inp) inp.addEventListener('keydown', e=>{
     if(e.key==='Enter') addAction(inp.value);
-    if(e.key==='Escape'){
-      document.getElementById('actions-add-wrap').classList.remove('open');
-    }
   });
 });
 
