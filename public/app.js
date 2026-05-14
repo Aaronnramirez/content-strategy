@@ -32,7 +32,7 @@ function platEmoji(name) {
 function hashStr(s) { let h=0; for(const c of s) h=(Math.imul(31,h)+c.charCodeAt(0))|0; return h; }
 
 // ════════════════ STATE ════════════════
-let S = {events:[],buckets:[],channels:[],csv:null,inspo:[],goals:[],goalsOpen:true};
+let S = {events:[],buckets:[],channels:[],csv:null,inspo:[],goals:[],goalsOpen:false};
 let activeBucket = null;
 let inspoFilter = 'All';
 let inspoType   = 'image';
@@ -246,7 +246,9 @@ function buildMonth(yr,mo,today,isCurrent){
     const isToday=d===today.getDate()&&dm===today.getMonth()&&dy===today.getFullYear();
     const evs=S.events.filter(e=>e.date===ds);
     const cell=document.createElement('div');
-    cell.className='cal-day'+(other?' other-month':'')+(isToday?' today':'');
+    const col=i%7; // 0=Sun, 6=Sat
+    const isWeekend=(col===0||col===6);
+    cell.className='cal-day'+(other?' other-month':'')+(isToday?' today':'')+(isWeekend?' weekend':'');
     // Drop target
     cell.addEventListener('dragover',e=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; cell.classList.add('drag-over'); });
     cell.addEventListener('dragleave',e=>{ if(!cell.contains(e.relatedTarget)) cell.classList.remove('drag-over'); });
