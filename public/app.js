@@ -34,10 +34,10 @@ function hashStr(s) { let h=0; for(const c of s) h=(Math.imul(31,h)+c.charCodeAt
 // ════════════════ STATE ════════════════
 let S = {events:[],buckets:[],channels:[],csv:null,inspo:[],goals:[],goalsOpen:true};
 let activeBucket = null;
-let ytRangeDays = 90, ytPeriodOffset = 0, activeInnerTab = 'yt-data';
 let inspoFilter = 'All';
 let inspoType   = 'image';
 let pendingImage = null;
+let amountsHidden = false;
 
 function getToken() { return localStorage.getItem('cos-token') || ''; }
 
@@ -47,7 +47,18 @@ async function load() {
     if (res.status === 401) { localStorage.removeItem('cos-token'); showAuthScreen(); return false; }
     if (res.ok) { const data = await res.json(); S = { ...S, ...data }; }
     return true;
-  } catch(e) { console.error('Failed to load data:', e); return false; }
+  } catch(e) {
+    showAuthScreen();
+    showAuthError('Cannot connect to the server. Make sure the app is running with: npm start');
+    return false;
+  }
+}
+
+async function refreshToken() {
+  try {
+    const res = await fetch('/api/auth/refresh', { headers: { 'Authorization': `Bearer ${getToken()}` } });
+    if (res.ok) { const data = await res.json(); localStorage.setItem('cos-token', data.token); }
+  } catch {}
 }
 
 function persist() {
@@ -63,8 +74,6 @@ const TOPBAR_META = {
   calendar:  {title:'Calendar',    sub:'Your content schedule — current month through the next 6'},
   board:     {title:'Board',       sub:'Manage buckets and channels in one place'},
   inspo:     {title:'Inspo Board', sub:'Collect links, images, and references organized by platform'},
-  analytics: {title:'Analytics',   sub:'YouTube performance data from your imported CSV'},
-  import:    {title:'CSV Import',  sub:'Upload a YouTube Studio CSV to power the Analytics tab'},
 };
 const TOPBAR_BTN = {
   calendar: `<button class="btn btn-primary btn-sm" onclick="openEventModal(null)">+ Add Content</button>`,
@@ -83,21 +92,9 @@ document.querySelectorAll('.nav-item').forEach(el=>{
     document.getElementById('page-actions').innerHTML=TOPBAR_BTN[s]||'';
     if(s==='board') renderBoard();
     if(s==='inspo') renderInspo();
-    if(s==='analytics') renderAnalytics();
-    if(s==='import'&&S.csv) renderCSVTable();
   });
 });
 
-document.querySelectorAll('.inner-tab').forEach(tab=>{
-  tab.addEventListener('click',()=>{
-    document.querySelectorAll('.inner-tab').forEach(t=>t.classList.remove('active'));
-    document.querySelectorAll('.inner-panel').forEach(p=>p.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById('panel-'+tab.dataset.panel).classList.add('active');
-    activeInnerTab=tab.dataset.panel==='yt-data'?'yt-data':'yt-suggested';
-    renderAnalytics();
-  });
-});
 
 // ════════════════ MODAL UTILS ════════════════
 function openModal(id)  { document.getElementById(id).style.display='flex'; }
@@ -129,10 +126,31 @@ function renderCalendar(){
     if(mo>11){mo-=12;yr++;} container.appendChild(buildMonth(yr,mo,now,m===0));
   }
 }
+function toggleSidebar(){
+  document.body.classList.toggle('sidebar-hidden');
+  const hidden=document.body.classList.contains('sidebar-hidden');
+  document.getElementById('sidebar-toggle-icon').textContent=hidden?'▶':'◀';
+}
+
+function toggleAmounts(){
+  amountsHidden=!amountsHidden;
+  document.querySelectorAll('.month-spon-amount').forEach(el=>el.classList.toggle('hidden',amountsHidden));
+  document.querySelectorAll('.month-spon-eye').forEach(el=>el.textContent=amountsHidden?'🙈':'👁');
+}
+
 function buildMonth(yr,mo,today,isCurrent){
   const wrap=document.createElement('div');
   const h=document.createElement('div'); h.className='month-heading';
-  h.innerHTML=`${MONTHS[mo]} <span class="yr">${yr}</span>${isCurrent?'<span class="now-badge">This month</span>':''}`;
+
+  // Calculate sponsorship total for this month
+  const prefix=`${yr}-${String(mo+1).padStart(2,'0')}`;
+  const sponEvs=S.events.filter(e=>e.sponsored&&e.date&&e.date.startsWith(prefix));
+  const sponTotal=sponEvs.reduce((sum,e)=>sum+(e.sponsoredAmount||0),0);
+  const sponBadge=sponEvs.length
+    ? `<span class="month-spon-badge">💰 <span class="month-spon-amount${amountsHidden?' hidden':''}">$${sponTotal.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</span><button class="month-spon-eye" onclick="event.stopPropagation();toggleAmounts()">${amountsHidden?'🙈':'👁'}</button></span>`
+    : '';
+
+  h.innerHTML=`${MONTHS[mo]} <span class="yr">${yr}</span>${isCurrent?'<span class="now-badge">This month</span>':''}${sponBadge}`;
   wrap.appendChild(h);
   const grid=document.createElement('div'); grid.className='cal-grid';
   const wk=document.createElement('div'); wk.className='cal-weekdays';
@@ -151,12 +169,31 @@ function buildMonth(yr,mo,today,isCurrent){
     const evs=S.events.filter(e=>e.date===ds);
     const cell=document.createElement('div');
     cell.className='cal-day'+(other?' other-month':'')+(isToday?' today':'');
+    // Drop target
+    cell.addEventListener('dragover',e=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; cell.classList.add('drag-over'); });
+    cell.addEventListener('dragleave',e=>{ if(!cell.contains(e.relatedTarget)) cell.classList.remove('drag-over'); });
+    cell.addEventListener('drop',e=>{
+      e.preventDefault(); cell.classList.remove('drag-over');
+      const evId=e.dataTransfer.getData('eventId'); if(!evId) return;
+      const ev=S.events.find(x=>x.id===evId); if(!ev) return;
+      ev.date=ds; persist(); renderCalendar(); renderSponsoredTotal();
+    });
     const num=document.createElement('div'); num.className='day-num'; num.textContent=d; cell.appendChild(num);
     const evDiv=document.createElement('div'); evDiv.className='day-events';
     evs.slice(0,4).forEach(ev=>{
       const bk=S.buckets.find(b=>b.id===ev.bucketId), col=bk?bk.color:PALETTE[0];
       const chip=document.createElement('div'); chip.className='day-event';
-      chip.style.background=col+'22'; chip.style.color=col; chip.textContent=ev.title; chip.title=ev.title;
+      chip.style.background=col+'22'; chip.style.color=col;
+      chip.textContent=ev.title; chip.title=ev.title;
+      chip.setAttribute('draggable','true');
+      chip.addEventListener('dragstart',e=>{
+        e.dataTransfer.setData('eventId',ev.id);
+        e.dataTransfer.effectAllowed='move';
+        chip.classList.add('dragging');
+        // prevent cell click from firing
+        setTimeout(()=>chip.classList.add('dragging'),0);
+      });
+      chip.addEventListener('dragend',()=>chip.classList.remove('dragging'));
       chip.addEventListener('click',e=>{e.stopPropagation();openDetail(ev.id);});
       evDiv.appendChild(chip);
     });
@@ -184,12 +221,84 @@ document.getElementById('save-event-btn').addEventListener('click',()=>{
 });
 function openDetail(id){
   const ev=S.events.find(e=>e.id===id); if(!ev) return;
-  const bk=S.buckets.find(b=>b.id===ev.bucketId), ch=S.channels.find(c=>c.id===ev.channelId), ss=STATUS_STYLE[ev.status]||STATUS_STYLE.idea;
+  const bk=S.buckets.find(b=>b.id===ev.bucketId), ch=S.channels.find(c=>c.id===ev.channelId);
+
   document.getElementById('detail-title-text').textContent=ev.title;
-  document.getElementById('detail-body').innerHTML=`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"><span class="badge" style="background:${ss.bg};color:${ss.text}">${ev.status}</span>${bk?`<span class="badge" style="background:${bk.color}22;color:${bk.color}">${bk.name}</span>`:''} ${ch?`<span class="badge" style="background:var(--surface3);color:var(--text-muted)">${ch.icon||'📡'} ${ch.name}</span>`:''}</div>${ev.date?`<p style="font-size:12px;color:var(--text-muted);margin-bottom:8px">📅 ${fmtDate(ev.date)}</p>`:''}${ev.notes?`<p style="font-size:13px;color:var(--text-muted);line-height:1.7">${ev.notes}</p>`:''}`;
-  document.getElementById('detail-del-btn').onclick=()=>{S.events=S.events.filter(e=>e.id!==id);persist();closeModal('modal-detail');renderCalendar();};
+
+  const statuses=['idea','scripting','recording','editing','scheduled','published'];
+  const statusPills=statuses.map(s=>{
+    const ss=STATUS_STYLE[s]||STATUS_STYLE.idea;
+    const isActive=ev.status===s;
+    return `<button class="detail-status-btn${isActive?' active':''}" data-status="${s}"
+      style="${isActive?`background:${ss.bg};color:${ss.text};border-color:${ss.text}`:''}"
+      onclick="setEventStatus('${id}','${s}',this)">${s}</button>`;
+  }).join('');
+
+  const sponsoredOn=!!ev.sponsored;
+  const sponsoredHTML=`
+    <div class="detail-sponsored-row">
+      <button class="detail-sponsored-toggle${sponsoredOn?' on':''}" id="spon-toggle-${id}" onclick="toggleSponsored('${id}')">
+        💰 Sponsored${sponsoredOn?' ✓':''}
+      </button>
+      <div class="detail-amount-wrap" id="detail-amount-wrap-${id}" style="display:${sponsoredOn?'flex':'none'}">
+        <span class="detail-amount-prefix">$</span>
+        <input class="detail-amount-input" type="number" placeholder="0.00" min="0" step="0.01"
+          value="${ev.sponsoredAmount||''}" oninput="setEventAmount('${id}',this.value)"/>
+      </div>
+    </div>`;
+
+  const metaBadges=`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+    ${bk?`<span class="badge" style="background:${bk.color}22;color:${bk.color}">${bk.name}</span>`:''}
+    ${ch?`<span class="badge" style="background:var(--surface3);color:var(--text-muted)">${ch.icon||'📡'} ${ch.name}</span>`:''}
+    ${ev.date?`<span class="badge" style="background:var(--surface3);color:var(--text-muted)">📅 ${fmtDate(ev.date)}</span>`:''}
+  </div>`;
+
+  document.getElementById('detail-body').innerHTML=`
+    ${metaBadges}
+    <div class="detail-section-label">Status</div>
+    <div class="detail-status-row">${statusPills}</div>
+    ${sponsoredHTML}
+    ${ev.notes?`<div class="detail-notes">${ev.notes}</div>`:''}
+  `;
+
+  document.getElementById('detail-del-btn').onclick=()=>{
+    S.events=S.events.filter(e=>e.id!==id);
+    persist(); closeModal('modal-detail'); renderCalendar(); renderSponsoredTotal();
+  };
   openModal('modal-detail');
 }
+
+function setEventStatus(id,status,btn){
+  const ev=S.events.find(e=>e.id===id); if(!ev) return;
+  ev.status=status; persist();
+  document.querySelectorAll('.detail-status-btn').forEach(b=>{
+    const s=b.dataset.status; const ss=STATUS_STYLE[s]||STATUS_STYLE.idea;
+    const active=b===btn;
+    b.classList.toggle('active',active);
+    b.style.background=active?ss.bg:'';
+    b.style.color=active?ss.text:'';
+    b.style.borderColor=active?ss.text:'';
+  });
+}
+
+function toggleSponsored(id){
+  const ev=S.events.find(e=>e.id===id); if(!ev) return;
+  ev.sponsored=!ev.sponsored; persist();
+  const btn=document.getElementById(`spon-toggle-${id}`);
+  if(btn){btn.classList.toggle('on',ev.sponsored);btn.innerHTML=`💰 Sponsored${ev.sponsored?' ✓':''}`;}
+  const wrap=document.getElementById(`detail-amount-wrap-${id}`);
+  if(wrap) wrap.style.display=ev.sponsored?'flex':'none';
+  renderSponsoredTotal();
+}
+
+function setEventAmount(id,value){
+  const ev=S.events.find(e=>e.id===id); if(!ev) return;
+  ev.sponsoredAmount=parseFloat(value)||0; persist(); renderSponsoredTotal();
+}
+
+// Sponsorship totals are now rendered inline in each month heading via buildMonth().
+// This function re-renders the calendar to refresh all month badges.
+function renderSponsoredTotal(){ renderCalendar(); }
 
 // ════════════════ BOARD ════════════════
 function renderBoard(){ renderBuckets(); renderChannels(); }
@@ -451,270 +560,6 @@ function resizeImage(dataUrl, maxW=1000) {
   });
 }
 
-// ════════════════ ANALYTICS ════════════════
-document.querySelectorAll('.range-btn').forEach(btn=>{btn.addEventListener('click',()=>{document.querySelectorAll('.range-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');ytRangeDays=parseInt(btn.dataset.days);ytPeriodOffset=0;renderAnalytics();});});
-document.getElementById('period-prev').addEventListener('click',()=>{ytPeriodOffset++;renderAnalytics();});
-document.getElementById('period-next').addEventListener('click',()=>{if(ytPeriodOffset>0){ytPeriodOffset--;renderAnalytics();}});
-
-function renderAnalytics(){if(activeInnerTab==='yt-data')renderYTData();else renderYTSuggested();}
-
-function detectCols(headers){const h=headers.map(x=>x.toLowerCase().trim());const find=(...t)=>h.findIndex(x=>t.some(s=>x.includes(s)));return{date:find('date'),views:find('views'),watchTime:find('watch time'),subs:find('subscriber'),impressions:h.findIndex(x=>x.includes('impression')&&!x.includes('click')&&!x.includes('through')),ctr:find('click-through','ctr'),avgDuration:find('average view duration'),trafficSrc:find('traffic source'),};}
-
-function getDateRange(){const end=new Date();end.setHours(23,59,59,0);end.setDate(end.getDate()-ytPeriodOffset*ytRangeDays);const start=new Date(end);start.setDate(start.getDate()-ytRangeDays+1);start.setHours(0,0,0,0);return{start,end};}
-
-function renderYTData(){
-  const el=document.getElementById('yt-data-content');
-  if(!S.csv){el.innerHTML=uploadPromptHTML('YouTube Data','Export from <strong>YouTube Studio → Analytics → Content → Export</strong>.');return;}
-  const[headers,...allRows]=S.csv.rows, cols=detectCols(headers);
-  if(cols.date===-1||cols.views===-1){el.innerHTML=`<div class="upload-prompt"><h3>Unrecognised format</h3><p>This CSV doesn't have the expected columns. Try the <strong>Overview</strong> export from YouTube Studio Analytics.</p></div>`;return;}
-  const{start,end}=getDateRange();
-  document.getElementById('range-label').textContent=`${fmtDateShort(start)} – ${fmtDateShort(end)}`;
-  document.getElementById('period-next').style.opacity=ytPeriodOffset===0?'.4':'1';
-  document.getElementById('period-next').style.pointerEvents=ytPeriodOffset===0?'none':'';
-  const rows=allRows.filter(r=>{const ds=(r[cols.date]||'').trim();if(!ds)return false;const d=new Date(ds);return !isNaN(d)&&d>=start&&d<=end;}).sort((a,b)=>new Date(a[cols.date])-new Date(b[cols.date]));
-  if(!rows.length){el.innerHTML=`<div class="upload-prompt"><h3 style="font-size:14px">No data in this range</h3><p>Try a different range or navigate to an earlier period.</p></div>`;return;}
-  const sum=k=>rows.reduce((acc,r)=>acc+(parseNum(r[cols[k]])||0),0);
-  const avg=k=>cols[k]===-1?null:sum(k)/rows.filter(r=>r[cols[k]]!==undefined).length;
-  const totalViews=sum('views'),totalWatchH=cols.watchTime!==-1?sum('watchTime'):null,totalSubs=cols.subs!==-1?sum('subs'):null,totalImpr=cols.impressions!==-1?sum('impressions'):null,avgCTR=cols.ctr!==-1?avg('ctr'):null;
-  let cardsHTML=`<div class="metric-cards"><div class="metric-card"><div class="metric-card-label">Views</div><div class="metric-card-value" style="color:${CHART_COLORS.views}">${fmtNum(totalViews)}</div><div class="metric-card-sub">in ${rows.length} days</div><div class="metric-card-bar"><div class="metric-card-bar-fill" style="width:100%;background:${CHART_COLORS.views}"></div></div></div>`;
-  if(totalWatchH!==null)cardsHTML+=`<div class="metric-card"><div class="metric-card-label">Watch Time</div><div class="metric-card-value" style="color:${CHART_COLORS.watchTime}">${fmtNum(Math.round(totalWatchH))}h</div><div class="metric-card-sub">${fmtNum(Math.round(totalWatchH*60))} mins</div><div class="metric-card-bar"><div class="metric-card-bar-fill" style="width:80%;background:${CHART_COLORS.watchTime}"></div></div></div>`;
-  if(totalSubs!==null)cardsHTML+=`<div class="metric-card"><div class="metric-card-label">Subscribers</div><div class="metric-card-value" style="color:${CHART_COLORS.subscribers}">${totalSubs>=0?'+':''}${fmtNum(totalSubs)}</div><div class="metric-card-sub">gained in period</div><div class="metric-card-bar"><div class="metric-card-bar-fill" style="width:65%;background:${CHART_COLORS.subscribers}"></div></div></div>`;
-  if(totalImpr!==null)cardsHTML+=`<div class="metric-card"><div class="metric-card-label">Impressions</div><div class="metric-card-value" style="color:${CHART_COLORS.impressions}">${fmtNum(totalImpr)}</div><div class="metric-card-sub">${avgCTR!==null?`CTR: ${avgCTR.toFixed(1)}%`:''}</div><div class="metric-card-bar"><div class="metric-card-bar-fill" style="width:55%;background:${CHART_COLORS.impressions}"></div></div></div>`;
-  if(avgCTR!==null)cardsHTML+=`<div class="metric-card"><div class="metric-card-label">Avg CTR</div><div class="metric-card-value" style="color:${CHART_COLORS.ctr}">${avgCTR.toFixed(1)}%</div><div class="metric-card-sub">click-through rate</div><div class="metric-card-bar"><div class="metric-card-bar-fill" style="width:${Math.min(avgCTR*10,100)}%;background:${CHART_COLORS.ctr}"></div></div></div>`;
-  cardsHTML+='</div>';
-  const chartData=rows.map(r=>({date:(r[cols.date]||'').trim(),views:parseNum(r[cols.views])||0,watchTime:cols.watchTime!==-1?parseNum(r[cols.watchTime])||0:null}));
-  const tableIdxs=[cols.date,cols.views,cols.watchTime,cols.subs,cols.impressions,cols.ctr,cols.avgDuration].filter(i=>i!==-1);
-  const tableHeaders=headers.filter((_,i)=>tableIdxs.includes(i));
-  const tableHTML=`<div class="yt-table-wrap"><div class="yt-table-header"><h4>Daily Breakdown</h4><span style="font-size:12px;color:var(--text-muted)">${rows.length} rows</span></div><div class="yt-scroll"><table><thead><tr>${tableHeaders.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${[...rows].reverse().map(r=>`<tr>${tableIdxs.map(i=>`<td>${r[i]||''}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
-  el.innerHTML=cardsHTML+`<div class="chart-wrap" id="yt-chart-wrap"><div class="chart-header"><h4>Views Over Time</h4><div class="chart-legend"><div class="legend-item"><div class="legend-dot" style="background:${CHART_COLORS.views}"></div>Views</div>${cols.watchTime!==-1?`<div class="legend-item"><div class="legend-dot" style="background:${CHART_COLORS.watchTime}"></div>Watch Time (h)</div>`:''}</div></div><div id="chart-svg-container"></div></div>`+tableHTML;
-  requestAnimationFrame(()=>{const c=document.getElementById('chart-svg-container');if(c)drawMultiLineChart(c,chartData,cols);});
-}
-
-function drawMultiLineChart(container,data,cols){
-  if(data.length<2){container.innerHTML='<p style="color:var(--text-muted);font-size:12px;padding:20px">Not enough data points.</p>';return;}
-  const W=760,H=220,PT=14,PR=20,PB=38,PL=52,IW=W-PL-PR,IH=H-PT-PB;
-  const maxViews=Math.max(...data.map(d=>d.views))||1;
-  const hasWT=cols.watchTime!==-1&&data.some(d=>d.watchTime!==null);
-  const maxWT=hasWT?Math.max(...data.map(d=>d.watchTime||0))||1:1;
-  const wtScale=maxViews/maxWT;
-  const px=i=>PL+(i/(data.length-1))*IW, py=(v,mx=maxViews)=>PT+IH-(v/mx)*IH;
-  function smoothPath(pts){if(pts.length<2)return'';let d=`M ${pts[0][0]},${pts[0][1]}`;for(let i=0;i<pts.length-1;i++){const x0=pts[i-1]?pts[i-1][0]:pts[i][0],y0=pts[i-1]?pts[i-1][1]:pts[i][1],x1=pts[i][0],y1=pts[i][1],x2=pts[i+1][0],y2=pts[i+1][1],x3=pts[i+2]?pts[i+2][0]:x2,y3=pts[i+2]?pts[i+2][1]:y2,cp1x=x1+(x2-x0)/6,cp1y=y1+(y2-y0)/6,cp2x=x2-(x3-x1)/6,cp2y=y2-(y3-y1)/6;d+=` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${x2},${y2}`;}return d;}
-  const vPts=data.map((d,i)=>[px(i),py(d.views)]);
-  const wPts=hasWT?data.map((d,i)=>[px(i),py((d.watchTime||0)*wtScale)]):[];
-  const vPath=smoothPath(vPts), wPath=hasWT?smoothPath(wPts):'';
-  let gridSVG='',labelSVG='';
-  for(let g=0;g<=4;g++){const y=PT+(g/4)*IH,val=Math.round(maxViews*(1-g/4));gridSVG+=`<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="#d4cec5" stroke-width="1" stroke-dasharray="3,3"/>`;labelSVG+=`<text x="${PL-6}" y="${y+4}" text-anchor="end" fill="#7a7068" font-size="10" font-family="-apple-system,sans-serif">${fmtNumShort(val)}</text>`;}
-  const xStep=Math.max(1,Math.floor(data.length/6));
-  let xLabels='';
-  data.forEach((d,i)=>{if(i%xStep===0||i===data.length-1){const dt=new Date(d.date),lbl=!isNaN(dt)?`${MONTHS_S[dt.getMonth()]} ${dt.getDate()}`:d.date;xLabels+=`<text x="${px(i)}" y="${H-6}" text-anchor="middle" fill="#7a7068" font-size="10" font-family="-apple-system,sans-serif">${lbl}</text>`;}});
-  const gId1='gv'+uid(), gId2='gw'+uid();
-  const aV=vPath+` L ${vPts[vPts.length-1][0]},${PT+IH} L ${PL},${PT+IH} Z`;
-  const aW=hasWT?wPath+` L ${wPts[wPts.length-1][0]},${PT+IH} L ${PL},${PT+IH} Z`:'';
-  const dots=data.map((d,i)=>`<circle class="chart-dot" cx="${px(i)}" cy="${py(d.views)}" r="3.5" fill="${CHART_COLORS.views}" opacity="0" data-label="${fmtDateShort2(d.date)}" data-views="${d.views}" data-wt="${d.watchTime!==null?d.watchTime.toFixed(1):''}"/>`).join('');
-  const svg=`<svg viewBox="0 0 ${W} ${H}" class="chart-svg" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="${gId1}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${CHART_COLORS.views}" stop-opacity=".18"/><stop offset="100%" stop-color="${CHART_COLORS.views}" stop-opacity="0"/></linearGradient>${hasWT?`<linearGradient id="${gId2}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${CHART_COLORS.watchTime}" stop-opacity=".14"/><stop offset="100%" stop-color="${CHART_COLORS.watchTime}" stop-opacity="0"/></linearGradient>`:''}</defs>${gridSVG}${labelSVG}${xLabels}${hasWT?`<path d="${aW}" fill="url(#${gId2})"/><path d="${wPath}" fill="none" stroke="${CHART_COLORS.watchTime}" stroke-width="1.5" stroke-dasharray="5,3"/>`:''}<path d="${aV}" fill="url(#${gId1})"/><path d="${vPath}" fill="none" stroke="${CHART_COLORS.views}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><g>${dots}</g></svg>`;
-  container.innerHTML=svg;
-  const tooltip=document.getElementById('chart-tooltip');
-  container.querySelectorAll('.chart-dot').forEach(dot=>{dot.addEventListener('mouseenter',()=>{dot.setAttribute('opacity','1');const wt=dot.dataset.wt?`<div>Watch Time: <strong>${dot.dataset.wt}h</strong></div>`:'';tooltip.innerHTML=`<strong>${dot.dataset.label}</strong><div>Views: <strong>${fmtNum(parseInt(dot.dataset.views))}</strong></div>${wt}`;tooltip.style.display='block';});dot.addEventListener('mousemove',e=>{tooltip.style.left=(e.clientX+12)+'px';tooltip.style.top=(e.clientY-40)+'px';});dot.addEventListener('mouseleave',()=>{dot.setAttribute('opacity','0');tooltip.style.display='none';});});
-}
-
-function renderYTSuggested(){
-  const el=document.getElementById('yt-sug-content');
-  if(!S.csv){el.innerHTML=uploadPromptHTML('Suggested Traffic','Export from <strong>YouTube Studio → Analytics → Reach tab → Traffic sources → Export</strong>. The file should have a <code>Traffic source type</code> column.');return;}
-  const[headers,...allRows]=S.csv.rows, cols=detectCols(headers);
-  if(cols.trafficSrc===-1){el.innerHTML=`<div class="upload-prompt"><h3>Traffic Sources CSV needed</h3><p>Your current CSV is an overview export.<br>To see Suggested Traffic data, upload the <strong>Traffic Sources</strong> report from YouTube Studio → Analytics → Reach tab → Traffic sources → Export.</p></div>`;return;}
-  const vCol=cols.views!==-1?cols.views:headers.findIndex(h=>h.toLowerCase().includes('view'));
-  const wtCol=cols.watchTime!==-1?cols.watchTime:headers.findIndex(h=>h.toLowerCase().includes('watch'));
-  const sourceMap={};
-  allRows.forEach(r=>{const src=(r[cols.trafficSrc]||'').trim();if(!src)return;const v=parseNum(r[vCol])||0,w=wtCol!==-1?parseNum(r[wtCol])||0:0;if(!sourceMap[src])sourceMap[src]={views:0,watchTime:0};sourceMap[src].views+=v;sourceMap[src].watchTime+=w;});
-  const sources=Object.entries(sourceMap).map(([name,d])=>({name,...d})).sort((a,b)=>b.views-a.views);
-  const totalViews=sources.reduce((s,x)=>s+x.views,0)||1;
-  const sugRow=sources.find(s=>s.name.toLowerCase().includes('suggested'));
-  let metricsHTML='<div class="metric-cards">';
-  if(sugRow){const pct=(sugRow.views/totalViews*100).toFixed(1);metricsHTML+=`<div class="metric-card"><div class="metric-card-label">Views from Suggested</div><div class="metric-card-value" style="color:${CHART_COLORS.suggested}">${fmtNum(sugRow.views)}</div><div class="metric-card-sub">${pct}% of total views</div><div class="metric-card-bar"><div class="metric-card-bar-fill" style="width:${pct}%;background:${CHART_COLORS.suggested}"></div></div></div><div class="metric-card"><div class="metric-card-label">Suggested Watch Time</div><div class="metric-card-value" style="color:${CHART_COLORS.suggested}">${fmtNum(Math.round(sugRow.watchTime))}h</div><div class="metric-card-sub">from recommended content</div><div class="metric-card-bar"><div class="metric-card-bar-fill" style="width:${pct}%;background:${CHART_COLORS.suggested}"></div></div></div>`;}
-  metricsHTML+=`<div class="metric-card"><div class="metric-card-label">Total Sources</div><div class="metric-card-value" style="color:var(--accent)">${sources.length}</div><div class="metric-card-sub">traffic channels found</div><div class="metric-card-bar"><div class="metric-card-bar-fill" style="width:100%;background:var(--accent)"></div></div></div><div class="metric-card"><div class="metric-card-label">Total Views</div><div class="metric-card-value" style="color:var(--accent)">${fmtNum(totalViews)}</div><div class="metric-card-sub">across all sources</div><div class="metric-card-bar"><div class="metric-card-bar-fill" style="width:100%;background:var(--accent)"></div></div></div></div>`;
-  const maxSrcV=sources[0]?.views||1;
-  let srcHTML='<div class="sug-source-list">';
-  sources.forEach((src,i)=>{const isSug=src.name.toLowerCase().includes('suggested'),color=isSug?CHART_COLORS.suggested:PALETTE[i%PALETTE.length],pct=(src.views/totalViews*100).toFixed(1),bw=(src.views/maxSrcV*100).toFixed(1);srcHTML+=`<div class="sug-source-row"><div class="sug-source-name" style="color:${isSug?CHART_COLORS.suggested:'inherit'}">${isSug?'✨ ':''}<strong>${src.name}</strong></div><div class="sug-bar-wrap"><div class="sug-bar" style="width:${bw}%;background:${color}"></div></div><div class="sug-views" style="color:${color}">${fmtNum(src.views)}</div><div class="sug-pct">${pct}%</div></div>`;});
-  srcHTML+='</div>';
-  const tableHTML=`<div class="yt-table-wrap"><div class="yt-table-header"><h4>Traffic Source Breakdown</h4></div><div class="yt-scroll"><table><thead><tr><th>Traffic Source</th><th>Views</th>${wtCol!==-1?'<th>Watch Time (h)</th>':''}<th>% of Total</th></tr></thead><tbody>${sources.map(s=>`<tr><td>${s.name}</td><td>${fmtNum(s.views)}</td>${wtCol!==-1?`<td>${fmtNum(Math.round(s.watchTime))}</td>`:''}<td>${(s.views/totalViews*100).toFixed(1)}%</td></tr>`).join('')}</tbody></table></div></div>`;
-  el.innerHTML=metricsHTML+`<div class="chart-wrap"><div class="chart-header"><h4>Views by Traffic Source</h4></div><div id="sug-bar-chart"></div></div>`+srcHTML+tableHTML;
-  requestAnimationFrame(()=>{const bc=document.getElementById('sug-bar-chart');if(bc)drawHBarChart(bc,sources,totalViews);});
-}
-
-function drawHBarChart(container,sources,total){
-  const top8=sources.slice(0,8),W=760,rowH=32,PT=10,PB=10,PL=200,PR=60,H=PT+top8.length*rowH+PB,maxV=top8[0]?.views||1,IW=W-PL-PR;
-  let bars='',labels='',values='';
-  top8.forEach((s,i)=>{const isSug=s.name.toLowerCase().includes('suggested'),color=isSug?CHART_COLORS.suggested:PALETTE[i%PALETTE.length],y=PT+i*rowH,bw=(s.views/maxV)*IW;bars+=`<rect x="${PL}" y="${y+6}" width="${Math.max(bw,2)}" height="${rowH-12}" rx="3" fill="${color}" opacity=".85"/>`;labels+=`<text x="${PL-8}" y="${y+rowH/2+4}" text-anchor="end" fill="#7a7068" font-size="11" font-family="-apple-system,sans-serif">${s.name.length>24?s.name.slice(0,24)+'…':s.name}</text>`;values+=`<text x="${PL+bw+6}" y="${y+rowH/2+4}" fill="#7a7068" font-size="11" font-family="-apple-system,sans-serif">${fmtNum(s.views)} (${(s.views/total*100).toFixed(1)}%)</text>`;});
-  container.innerHTML=`<svg viewBox="0 0 ${W} ${H}" class="chart-svg" xmlns="http://www.w3.org/2000/svg">${labels}${bars}${values}</svg>`;
-}
-
-function uploadPromptHTML(name,instructions){return`<div class="upload-prompt"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><h3>No CSV data yet</h3><p>${instructions}</p><button class="btn btn-primary" style="margin-top:4px" onclick="document.querySelector('.nav-item[data-section=import]').click()">Go to CSV Import →</button></div>`;}
-
-// ════════════════ CSV IMPORT ════════════════
-const dropZone=document.getElementById('drop-zone'),csvInput=document.getElementById('csv-input');
-dropZone.addEventListener('click',()=>csvInput.click());
-dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('drag-over');});
-dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag-over'));
-dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag-over');if(e.dataTransfer.files[0])loadCSV(e.dataTransfer.files[0]);});
-csvInput.addEventListener('change',e=>{if(e.target.files[0])loadCSV(e.target.files[0]);});
-document.getElementById('csv-clear').addEventListener('click',()=>{S.csv=null;persist();document.getElementById('csv-preview').style.display='none';csvInput.value='';});
-function loadCSV(file){const reader=new FileReader();reader.onload=e=>{const rows=parseCSV(e.target.result);if(!rows.length){alert('Could not parse CSV');return;}S.csv={filename:file.name,rows,at:Date.now()};persist();renderCSVTable();};reader.readAsText(file);}
-function parseCSV(txt){return txt.split(/\r?\n/).filter(l=>l.trim()).map(line=>{const row=[];let inQ=false,cur='';for(const c of line){if(c==='"'){inQ=!inQ;}else if(c===','&&!inQ){row.push(cur.trim());cur='';}else{cur+=c;}}row.push(cur.trim());return row;});}
-
-function isVideoCSV(headers){const h=headers.map(x=>x.toLowerCase().trim());return h.some(x=>x.includes('video title')||x.includes('video publish'));}
-
-function detectVideoCols(headers){
-  const h=headers.map(x=>x.toLowerCase().trim());
-  const find=(...t)=>h.findIndex(x=>t.some(s=>x.includes(s)));
-  return{
-    content:     find('content'),
-    title:       find('video title','title'),
-    publishTime: find('publish time','published'),
-    duration:    find('duration'),
-    views:       find('views'),
-    watchTime:   find('watch time'),
-    subs:        find('subscriber'),
-    revenue:     find('revenue'),
-    impressions: h.findIndex(x=>x.includes('impression')&&!x.includes('click')&&!x.includes('through')),
-    ctr:         find('click-through','ctr'),
-  };
-}
-
-let selectedVideoIdx = 0;
-
-function getTop20(headers, rows) {
-  const cols = detectVideoCols(headers);
-  const data = rows.filter(r=>{
-    const t = cols.title !== -1 ? (r[cols.title]||'').trim() : '';
-    const c = cols.content !== -1 ? (r[cols.content]||'').trim() : '';
-    return t && t.toLowerCase() !== 'total' && c;
-  });
-  if (cols.views !== -1) data.sort((a,b)=>(parseNum(b[cols.views])||0)-(parseNum(a[cols.views])||0));
-  return { top20: data.slice(0,20), cols };
-}
-
-function renderCSVTable(){
-  const d=S.csv; if(!d)return;
-  const[headers,...rows]=d.rows;
-  document.getElementById('csv-filename').textContent=d.filename;
-  document.getElementById('csv-stats').textContent=`${rows.length} rows · ${headers.length} columns · loaded ${fmtDate(new Date(d.at).toISOString().slice(0,10))}`;
-  document.getElementById('csv-preview').style.display='block';
-  if(isVideoCSV(headers)){ selectedVideoIdx=0; renderVideoTabs(headers,rows); }
-  else { renderRawTable(headers,rows); }
-}
-
-function renderRawTable(headers,rows){
-  document.getElementById('csv-content').innerHTML=`<div class="csv-scroll"><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.slice(0,500).map(r=>'<tr>'+headers.map((_,i)=>`<td title="${(r[i]||'').replace(/"/g,'&quot;')}">${r[i]||''}</td>`).join('')+'</tr>').join('')}${rows.length>500?`<tr><td colspan="${headers.length}" style="text-align:center;color:var(--text-muted);padding:12px">Showing first 500 of ${rows.length} rows</td></tr>`:''}</tbody></table></div>`;
-}
-
-function renderVideoTabs(headers, rows){
-  const{top20,cols}=getTop20(headers,rows);
-  const maxViews=parseNum(top20[0]?.[cols.views])||1;
-  const listHTML=top20.map((row,i)=>{
-    const title=cols.title!==-1?(row[cols.title]||'Untitled'):'Untitled';
-    const views=cols.views!==-1?parseNum(row[cols.views])||0:0;
-    const barW=Math.round(views/maxViews*100);
-    return `<div class="video-list-item${i===selectedVideoIdx?' active':''}" onclick="selectVideo(${i})">
-      <div class="video-rank">#${i+1}</div>
-      <div class="video-list-info">
-        <div class="video-list-title">${title}</div>
-        <div class="video-list-views">${fmtNum(views)} views</div>
-        <div class="video-list-bar"><div class="video-list-bar-fill" style="width:${barW}%"></div></div>
-      </div>
-    </div>`;
-  }).join('');
-  document.getElementById('csv-content').innerHTML=`
-    <div class="csv-video-layout">
-      <div class="video-list">
-        <div class="video-list-header">Top ${top20.length} Videos by Views</div>
-        ${listHTML}
-      </div>
-      <div class="video-detail" id="video-detail-panel">${buildVideoDetail(top20[selectedVideoIdx],cols,maxViews,top20)}</div>
-    </div>`;
-}
-
-function selectVideo(idx){
-  selectedVideoIdx=idx;
-  const d=S.csv; if(!d)return;
-  const[headers,...rows]=d.rows;
-  const{top20,cols}=getTop20(headers,rows);
-  const maxViews=parseNum(top20[0]?.[cols.views])||1;
-  document.querySelectorAll('.video-list-item').forEach((el,i)=>el.classList.toggle('active',i===idx));
-  document.getElementById('video-detail-panel').innerHTML=buildVideoDetail(top20[idx],cols,maxViews,top20);
-}
-
-function buildVideoDetail(row,cols,maxViews,top20){
-  const title     = cols.title!==-1?(row[cols.title]||'Untitled'):'Untitled';
-  const views     = cols.views!==-1?parseNum(row[cols.views])||0:0;
-  const watchH    = cols.watchTime!==-1?parseNum(row[cols.watchTime]):null;
-  const subs      = cols.subs!==-1?parseNum(row[cols.subs]):null;
-  const revenue   = cols.revenue!==-1?parseNum(row[cols.revenue]):null;
-  const impr      = cols.impressions!==-1?parseNum(row[cols.impressions]):null;
-  const ctr       = cols.ctr!==-1?parseNum(row[cols.ctr]):null;
-  const dur       = cols.duration!==-1?parseInt(row[cols.duration])||0:0;
-  const pubRaw    = cols.publishTime!==-1?row[cols.publishTime]:'';
-  const contentId = cols.content!==-1?(row[cols.content]||'').trim():'';
-  const rank      = top20.indexOf(row)+1;
-
-  // Format duration
-  const h=Math.floor(dur/3600),m=Math.floor((dur%3600)/60),s=dur%60;
-  const durStr=dur?(h>0?`${h}h ${m}m ${s}s`:`${m}m ${s}s`):'';
-
-  // Format publish date
-  let pubStr='';
-  if(pubRaw){const pd=new Date(pubRaw);if(!isNaN(pd))pubStr=fmtDateShort(pd);}
-
-  const maxWatch=watchH!==null?Math.max(...top20.map(r=>parseNum(r[cols.watchTime])||0)):1;
-  const maxImpr=impr!==null?Math.max(...top20.map(r=>parseNum(r[cols.impressions])||0)):1;
-
-  // Stat cards
-  const stats=[
-    {label:'Views',      value:fmtNum(views),                                    sub:`#${rank} of top 20`,   color:CHART_COLORS.views},
-    watchH!==null?{label:'Watch Time', value:fmtNum(Math.round(watchH))+'h',     sub:fmtNum(Math.round(watchH*60))+' mins', color:CHART_COLORS.watchTime}:null,
-    subs!==null?  {label:'Subscribers',value:(subs>=0?'+':'')+fmtNum(subs),       sub:'gained',              color:CHART_COLORS.subscribers}:null,
-    revenue!==null?{label:'Revenue',   value:'$'+revenue.toFixed(2),              sub:'estimated',           color:CHART_COLORS.impressions}:null,
-    impr!==null?  {label:'Impressions',value:fmtNum(impr),                        sub:'',                    color:CHART_COLORS.ctr}:null,
-    ctr!==null?   {label:'CTR',        value:ctr.toFixed(1)+'%',                  sub:'click-through',       color:CHART_COLORS.suggested}:null,
-  ].filter(Boolean);
-
-  const statCardsHTML=stats.map(c=>`
-    <div class="video-stat-card">
-      <div class="video-stat-label">${c.label}</div>
-      <div class="video-stat-value" style="color:${c.color}">${c.value}</div>
-      ${c.sub?`<div class="video-stat-sub">${c.sub}</div>`:''}
-    </div>`).join('');
-
-  // Performance bars vs #1
-  const perfRows=[
-    {label:'Views',      pct:(views/maxViews*100).toFixed(1),    color:CHART_COLORS.views},
-    watchH!==null?{label:'Watch Time', pct:(watchH/maxWatch*100).toFixed(1), color:CHART_COLORS.watchTime}:null,
-    impr!==null?  {label:'Impressions',pct:(impr/maxImpr*100).toFixed(1),    color:CHART_COLORS.ctr}:null,
-  ].filter(Boolean);
-
-  const perfHTML=perfRows.map(r=>`
-    <div class="video-perf-row">
-      <div class="video-perf-label">${r.label}</div>
-      <div class="video-perf-bar-wrap"><div class="video-perf-bar-fill" style="width:${r.pct}%;background:${r.color}"></div></div>
-      <div class="video-perf-pct">${r.pct}%</div>
-    </div>`).join('');
-
-  const ytLink=contentId?`<a class="video-yt-link" href="https://youtube.com/watch?v=${contentId}" target="_blank" rel="noopener">↗ Watch on YouTube</a>`:'';
-
-  return `
-    <div class="video-detail-rank">🏆 #${rank} Most Viewed</div>
-    <div class="video-detail-title">${title}</div>
-    <div class="video-detail-meta">
-      ${pubStr?`<div class="video-detail-meta-item">📅 ${pubStr}</div>`:''}
-      ${durStr?`<div class="video-detail-meta-item">⏱ ${durStr}</div>`:''}
-      ${ytLink}
-    </div>
-    <div class="video-stat-grid">${statCardsHTML}</div>
-    <div class="video-perf-section">
-      <div class="video-perf-title">Performance vs #1 Video</div>
-      ${perfHTML}
-    </div>`;
-}
-
 // ════════════════ HELPERS ════════════════
 function uid(){return Math.random().toString(36).slice(2)+Date.now().toString(36);}
 function fmtDate(s){if(!s)return'';const[y,m,d]=s.split('-').map(Number);return`${MONTHS_S[m-1]} ${d}, ${y}`;}
@@ -742,18 +587,6 @@ function applyGoalsOpen() {
   document.getElementById('goals-chevron').classList.toggle('open', S.goalsOpen);
 }
 
-function getYTStatsFromCSV() {
-  if (!S.csv) return null;
-  const [headers, ...rows] = S.csv.rows;
-  const cols = detectCols(headers);
-  if (cols.views === -1) return null;
-  const subsGained = cols.subs !== -1 ? rows.reduce((a,r) => a + (parseNum(r[cols.subs])||0), 0) : null;
-  const totalViews  = rows.reduce((a,r) => a + (parseNum(r[cols.views])||0), 0);
-  const totalWatchH = cols.watchTime !== -1 ? rows.reduce((a,r) => a + (parseNum(r[cols.watchTime])||0), 0) : null;
-  const dateRange   = rows.length ? `${rows.length} days of data` : null;
-  return { subsGained, totalViews, totalWatchH, dateRange };
-}
-
 function renderGoals() {
   const grid  = document.getElementById('goals-grid');
   const badge = document.getElementById('goals-badge');
@@ -762,10 +595,9 @@ function renderGoals() {
   badge.textContent = S.goals.length;
   badge.style.display = S.goals.length ? 'inline' : 'none';
 
-  const ytStats = getYTStatsFromCSV();
   grid.innerHTML = '';
 
-  S.goals.forEach(g => grid.appendChild(buildGoalCard(g, ytStats)));
+  S.goals.forEach(g => grid.appendChild(buildGoalCard(g)));
 
   const add = document.createElement('div');
   add.className = 'goal-add-card';
@@ -774,26 +606,12 @@ function renderGoals() {
   grid.appendChild(add);
 }
 
-function buildGoalCard(g, ytStats) {
+function buildGoalCard(g) {
   const col     = platColor(g.platform);
   const emoji   = platEmoji(g.platform);
   const pct     = g.goalCount > 0 ? Math.min(100, (g.currentCount / g.goalCount) * 100) : 0;
-  const isYT    = g.platform === 'YouTube';
   const card    = document.createElement('div');
   card.className = 'goal-card';
-
-  let csvHTML = '';
-  if (isYT && ytStats) {
-    const parts = [];
-    if (ytStats.subsGained !== null && g.metric === 'Subscribers')
-      parts.push(`📊 ${ytStats.subsGained >= 0 ? '+' : ''}${fmtNum(ytStats.subsGained)} subs from CSV`);
-    if (g.metric === 'Views' || g.metric === 'Total Views')
-      parts.push(`📊 ${fmtNum(ytStats.totalViews)} views from CSV`);
-    if (g.metric === 'Watch Hours' && ytStats.totalWatchH !== null)
-      parts.push(`📊 ${fmtNum(Math.round(ytStats.totalWatchH))}h from CSV`);
-    if (parts.length)
-      csvHTML = `<div class="goal-csv-row">${parts.map(p=>`<span class="goal-csv-stat">${p}</span>`).join('')}${ytStats.dateRange?`<span class="goal-csv-stat" style="background:var(--surface3);color:var(--text-muted)">📅 ${ytStats.dateRange}</span>`:''}</div>`;
-  }
 
   const canSync = g.url && (g.metric === 'Followers' || g.metric === 'Subscribers');
 
@@ -825,7 +643,6 @@ function buildGoalCard(g, ytStats) {
         ${canSync ? `<span class="goal-sync-label">${g.lastFetched ? `Synced ${timeAgo(g.lastFetched)}` : 'Not synced yet'}</span>` : ''}
       </div>` : ''}
     ${g.notes ? `<div style="font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5">${g.notes}</div>` : ''}
-    ${csvHTML}
   `;
   return card;
 }
@@ -982,9 +799,10 @@ document.getElementById('auth-submit-btn').addEventListener('click', async () =>
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
-    const data = await res.json();
+    let data;
+    try { data = await res.json(); } catch { data = {}; }
     if (!res.ok) {
-      showAuthError(data.error || 'Something went wrong.');
+      showAuthError(data.error || 'Something went wrong. Is the server running?');
       btn.disabled = false; btn.textContent = authMode === 'login' ? 'Sign In' : 'Create Account';
       return;
     }
@@ -993,9 +811,9 @@ document.getElementById('auth-submit-btn').addEventListener('click', async () =>
     hideAuthScreen();
     S = {events:[],buckets:[],channels:[],csv:null,inspo:[],goals:[],goalsOpen:true};
     const ok = await load(); if (!ok) return;
-    renderCalendar(); renderGoals(); if (S.csv) renderCSVTable();
+    renderCalendar(); renderGoals(); renderSponsoredTotal();
   } catch {
-    showAuthError('Connection error. Please try again.');
+    showAuthError('Cannot reach the server. Make sure the app is running with: npm start');
     btn.disabled = false; btn.textContent = authMode === 'login' ? 'Sign In' : 'Create Account';
   }
 });
@@ -1019,10 +837,12 @@ async function init() {
   const token = getToken();
   if (!token) { showAuthScreen(); return; }
   const ok = await load(); if (!ok) return;
+  hideAuthScreen();
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
     setUserInSidebar(payload.email);
   } catch {}
-  renderCalendar(); renderGoals(); if (S.csv) renderCSVTable();
+  refreshToken(); // extend session in background
+  renderCalendar(); renderGoals(); renderSponsoredTotal();
 }
 init();

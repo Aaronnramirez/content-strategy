@@ -35,23 +35,20 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
       Inspo Board
     </div></li>
-    <li><div class="nav-item" data-section="analytics">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-      Analytics
-    </div></li>
-    <li><div class="nav-item" data-section="import">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      CSV Import
-    </div></li>
   </ul>
 </aside>
 
 <!-- MAIN -->
 <main class="main">
   <div class="topbar">
-    <div>
-      <h2 id="topbar-title">Calendar</h2>
-      <p id="topbar-sub">Your content schedule — current month through the next 6</p>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="sidebar-toggle-btn" id="sidebar-toggle-btn" onclick="toggleSidebar()" title="Toggle sidebar">
+        <span id="sidebar-toggle-icon">◀</span>
+      </button>
+      <div>
+        <h2 id="topbar-title">Calendar</h2>
+        <p id="topbar-sub">Your content schedule — current month through the next 6</p>
+      </div>
     </div>
     <div class="page-actions" id="page-actions">
       <button class="btn btn-primary btn-sm" onclick="openEventModal(null)">+ Add Content</button>
@@ -124,61 +121,12 @@
       <div class="inspo-grid" id="inspo-grid"></div>
     </section>
 
-    <!-- ANALYTICS -->
-    <section class="section" id="section-analytics">
-      <div class="inner-tabs">
-        <div class="inner-tab active" data-panel="yt-data">📊 YouTube Data</div>
-        <div class="inner-tab" data-panel="yt-suggested">✨ Suggested Traffic</div>
-      </div>
-      <div class="inner-panel active" id="panel-yt-data">
-        <div class="yt-toolbar">
-          <div class="yt-toolbar-left">
-            <div class="range-btns">
-              <button class="range-btn" data-days="7">7d</button>
-              <button class="range-btn" data-days="28">28d</button>
-              <button class="range-btn active" data-days="90">90d</button>
-            </div>
-            <div class="period-nav">
-              <button class="period-btn" id="period-prev">&#8592;</button>
-              <span class="range-label" id="range-label">—</span>
-              <button class="period-btn" id="period-next">&#8594;</button>
-            </div>
-          </div>
-        </div>
-        <div id="yt-data-content"></div>
-      </div>
-      <div class="inner-panel" id="panel-yt-suggested">
-        <div id="yt-sug-content"></div>
-      </div>
-    </section>
 
-    <!-- CSV IMPORT -->
-    <section class="section" id="section-import">
-      <div class="drop-zone" id="drop-zone">
-        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-          <line x1="16" y1="13" x2="8" y2="13"/>
-          <line x1="16" y1="17" x2="8" y2="17"/>
-        </svg>
-        <p><strong>Drop a YouTube Studio CSV export here</strong> or click to browse</p>
-        <p style="font-size:12px;margin-top:6px">Overview or Traffic Sources CSV both work</p>
-        <input type="file" id="csv-input" accept=".csv"/>
-      </div>
-      <div class="csv-preview" id="csv-preview" style="display:none">
-        <div class="csv-header">
-          <div><h3 id="csv-filename"></h3><p id="csv-stats"></p></div>
-          <button class="btn btn-ghost btn-sm" id="csv-clear">Clear</button>
-        </div>
-        <div id="csv-content"></div>
-      </div>
-    </section>
 
   </div>
 </main>
 
 <!-- Tooltip -->
-<div class="chart-tooltip" id="chart-tooltip"></div>
 
 <!-- ════ MODALS ════ -->
 

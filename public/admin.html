@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Content OS</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f0ece4;
+    color: #2c2416;
+    min-height: 100vh;
+  }
+
+  /* ── Gate ── */
+  #gate {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; padding: 24px;
+  }
+  .gate-card {
+    background: #fff; border-radius: 16px; padding: 48px 40px;
+    width: 100%; max-width: 400px; text-align: center;
+    box-shadow: 0 4px 32px rgba(0,0,0,0.10);
+  }
+  .gate-icon { font-size: 36px; margin-bottom: 12px; }
+  .gate-card h1 { font-size: 22px; font-weight: 700; color: #2c2416; margin-bottom: 4px; }
+  .gate-card p  { font-size: 13px; color: #8a7a6a; margin-bottom: 28px; }
+  .gate-input {
+    width: 100%; padding: 12px 14px; border: 1.5px solid #e0d8cc;
+    border-radius: 10px; font-size: 15px; background: #faf8f5;
+    outline: none; transition: border-color .15s;
+    margin-bottom: 12px;
+  }
+  .gate-input:focus { border-color: #7c5c3b; }
+  .gate-btn {
+    width: 100%; padding: 13px; background: #7c5c3b; color: #fff;
+    border: none; border-radius: 10px; font-size: 15px; font-weight: 600;
+    cursor: pointer; transition: background .15s;
+  }
+  .gate-btn:hover { background: #5e4229; }
+  .gate-error {
+    background: #fde8e0; color: #b84c39; border-radius: 8px;
+    padding: 10px 14px; font-size: 13px; margin-bottom: 12px; display: none;
+  }
+
+  /* ── Shell ── */
+  #shell { display: none; }
+  .topbar {
+    background: #2c2416; color: #f0ece4;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 28px; height: 56px; position: sticky; top: 0; z-index: 10;
+  }
+  .topbar-brand { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+  .topbar-badge {
+    background: #b84c39; color: #fff; font-size: 10px; font-weight: 700;
+    padding: 2px 7px; border-radius: 20px; letter-spacing: .5px;
+  }
+  .topbar-right { display: flex; align-items: center; gap: 14px; }
+  .topbar-key { font-size: 12px; color: #8a7a6a; font-family: monospace; }
+  .topbar-signout {
+    background: none; border: 1.5px solid #4a3a2a; color: #c8b89a;
+    border-radius: 8px; padding: 5px 12px; font-size: 13px; cursor: pointer;
+    transition: all .15s;
+  }
+  .topbar-signout:hover { background: #4a3a2a; color: #fff; }
+
+  .main { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
+
+  /* ── Stats row ── */
+  .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 32px; }
+  .stat-card {
+    background: #fff; border-radius: 12px; padding: 20px 22px;
+    box-shadow: 0 1px 6px rgba(0,0,0,.06);
+  }
+  .stat-label { font-size: 11px; font-weight: 700; letter-spacing: .8px; color: #8a7a6a; text-transform: uppercase; margin-bottom: 6px; }
+  .stat-value { font-size: 28px; font-weight: 800; color: #2c2416; }
+
+  /* ── Users table ── */
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .section-header h2 { font-size: 17px; font-weight: 700; }
+  .btn {
+    padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    cursor: pointer; border: none; transition: all .15s;
+  }
+  .btn-primary { background: #7c5c3b; color: #fff; }
+  .btn-primary:hover { background: #5e4229; }
+  .btn-ghost { background: #f0ece4; color: #5a4a3a; }
+  .btn-ghost:hover { background: #e0d8cc; }
+  .btn-danger { background: #fde8e0; color: #b84c39; }
+  .btn-danger:hover { background: #f5c8be; }
+  .btn-sm { padding: 5px 11px; font-size: 12px; border-radius: 7px; }
+
+  .users-table {
+    background: #fff; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 1px 6px rgba(0,0,0,.06);
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    background: #faf8f5; text-align: left; padding: 11px 18px;
+    font-size: 11px; font-weight: 700; letter-spacing: .6px;
+    text-transform: uppercase; color: #8a7a6a;
+    border-bottom: 1px solid #f0ece4;
+  }
+  td { padding: 13px 18px; font-size: 14px; border-bottom: 1px solid #f7f4ef; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #faf8f5; }
+  .user-avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: #7c5c3b; color: #fff; display: inline-flex;
+    align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; margin-right: 10px; vertical-align: middle;
+  }
+  .user-email { font-weight: 500; }
+  .user-date  { color: #8a7a6a; font-size: 13px; }
+  .action-btns { display: flex; gap: 6px; }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.45);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px; z-index: 100; display: none;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-card {
+    background: #fff; border-radius: 16px; padding: 32px;
+    width: 100%; max-width: 440px;
+    box-shadow: 0 8px 40px rgba(0,0,0,.18);
+  }
+  .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 20px; }
+  .field-label { font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: #8a7a6a; margin-bottom: 6px; display: block; }
+  .field-input {
+    width: 100%; padding: 11px 13px; border: 1.5px solid #e0d8cc;
+    border-radius: 9px; font-size: 14px; background: #faf8f5;
+    outline: none; transition: border-color .15s; margin-bottom: 16px;
+  }
+  .field-input:focus { border-color: #7c5c3b; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
+  .modal-error {
+    background: #fde8e0; color: #b84c39; border-radius: 8px;
+    padding: 10px 14px; font-size: 13px; margin-bottom: 14px; display: none;
+  }
+  .modal-success {
+    background: #d8eee4; color: #3a7050; border-radius: 8px;
+    padding: 10px 14px; font-size: 13px; margin-bottom: 14px; display: none;
+  }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: #2c2416; color: #f0ece4;
+    padding: 12px 20px; border-radius: 10px; font-size: 14px; font-weight: 500;
+    box-shadow: 0 4px 20px rgba(0,0,0,.25);
+    transform: translateY(80px); opacity: 0;
+    transition: all .25s; z-index: 200;
+  }
+  #toast.show { transform: translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- ── Gate ── -->
+<div id="gate">
+  <div class="gate-card">
+    <div class="gate-icon">🔐</div>
+    <h1>Admin Panel</h1>
+    <p>Content OS — restricted access</p>
+    <div id="gate-error" class="gate-error"></div>
+    <input id="gate-key" class="gate-input" type="password" placeholder="Admin key" autocomplete="off">
+    <button class="gate-btn" onclick="unlock()">Enter</button>
+  </div>
+</div>
+
+<!-- ── Shell ── -->
+<div id="shell">
+  <div class="topbar">
+    <div class="topbar-brand">
+      ✦ Content OS <span class="topbar-badge">ADMIN</span>
+    </div>
+    <div class="topbar-right">
+      <span class="topbar-key" id="key-display"></span>
+      <button class="topbar-signout" onclick="signout()">Sign out</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-label">Total Users</div>
+        <div class="stat-value" id="stat-users">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Newest Account</div>
+        <div class="stat-value" style="font-size:15px;padding-top:6px" id="stat-newest">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Admin Key</div>
+        <div class="stat-value" style="font-size:15px;padding-top:6px;font-family:monospace" id="stat-key">—</div>
+      </div>
+    </div>
+
+    <div class="section-header">
+      <h2>User Accounts</h2>
+      <button class="btn btn-ghost" onclick="loadUsers()">↻ Refresh</button>
+    </div>
+
+    <div class="users-table">
+      <table>
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>ID</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="users-tbody">
+          <tr><td colspan="4" style="color:#8a7a6a;text-align:center;padding:32px">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── Reset Password Modal ── -->
+<div class="modal-overlay" id="modal-reset">
+  <div class="modal-card">
+    <div class="modal-title">Reset Password</div>
+    <div id="reset-error" class="modal-error"></div>
+    <div id="reset-success" class="modal-success"></div>
+    <label class="field-label">New Password</label>
+    <input id="reset-password" class="field-input" type="password" placeholder="At least 8 characters">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-reset')">Cancel</button>
+      <button class="btn btn-primary" onclick="doResetPassword()">Save Password</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast ── -->
+<div id="toast"></div>
+
+<script>
+let ADMIN_KEY = '';
+let resetTargetId = null;
+
+// ── Gate ──
+document.getElementById('gate-key').addEventListener('keydown', e => { if (e.key === 'Enter') unlock(); });
+
+async function unlock() {
+  const key = document.getElementById('gate-key').value.trim();
+  if (!key) return;
+  // test the key
+  const res = await fetch('/api/admin/users', { headers: { 'x-admin-key': key } });
+  if (!res.ok) {
+    const err = document.getElementById('gate-error');
+    err.textContent = 'Invalid admin key.'; err.style.display = 'block';
+    return;
+  }
+  ADMIN_KEY = key;
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('shell').style.display = 'block';
+  document.getElementById('key-display').textContent = `key: ${key}`;
+  document.getElementById('stat-key').textContent = key;
+  const users = await res.json();
+  renderUsers(users);
+}
+
+function signout() {
+  ADMIN_KEY = '';
+  document.getElementById('gate').style.display = 'flex';
+  document.getElementById('shell').style.display = 'none';
+  document.getElementById('gate-key').value = '';
+  document.getElementById('gate-error').style.display = 'none';
+}
+
+// ── Users ──
+async function loadUsers() {
+  const res = await fetch('/api/admin/users', { headers: { 'x-admin-key': ADMIN_KEY } });
+  if (!res.ok) return;
+  renderUsers(await res.json());
+}
+
+function renderUsers(users) {
+  document.getElementById('stat-users').textContent = users.length;
+  if (users.length) {
+    const newest = users.slice().sort((a,b) => b.createdAt - a.createdAt)[0];
+    document.getElementById('stat-newest').textContent = newest.email.split('@')[0];
+  }
+
+  const tbody = document.getElementById('users-tbody');
+  if (!users.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="color:#8a7a6a;text-align:center;padding:32px">No accounts yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = users.map(u => `
+    <tr>
+      <td>
+        <span class="user-avatar">${u.email[0].toUpperCase()}</span>
+        <span class="user-email">${u.email}</span>
+      </td>
+      <td style="color:#8a7a6a">#${u.id}</td>
+      <td class="user-date">${u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—'}</td>
+      <td>
+        <div class="action-btns">
+          <button class="btn btn-sm btn-primary" onclick="impersonate(${u.id}, '${u.email}')">Log in as</button>
+          <button class="btn btn-sm btn-ghost" onclick="openReset(${u.id})">Reset PW</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id}, '${u.email}')">Delete</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ── Impersonate ──
+async function impersonate(userId, email) {
+  const res = await fetch('/api/admin/impersonate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY },
+    body: JSON.stringify({ userId }),
+  });
+  if (!res.ok) { toast('Failed to impersonate user'); return; }
+  const { token } = await res.json();
+  localStorage.setItem('cos-token', token);
+  toast(`Logged in as ${email} — redirecting…`);
+  setTimeout(() => window.location.href = '/', 1200);
+}
+
+// ── Reset password ──
+function openReset(userId) {
+  resetTargetId = userId;
+  document.getElementById('reset-password').value = '';
+  document.getElementById('reset-error').style.display = 'none';
+  document.getElementById('reset-success').style.display = 'none';
+  document.getElementById('modal-reset').classList.add('open');
+  setTimeout(() => document.getElementById('reset-password').focus(), 60);
+}
+
+async function doResetPassword() {
+  const password = document.getElementById('reset-password').value;
+  const errEl = document.getElementById('reset-error');
+  const okEl  = document.getElementById('reset-success');
+  errEl.style.display = 'none'; okEl.style.display = 'none';
+
+  if (!password || password.length < 8) {
+    errEl.textContent = 'Password must be at least 8 characters.';
+    errEl.style.display = 'block'; return;
+  }
+  const res = await fetch(`/api/admin/users/${resetTargetId}/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY },
+    body: JSON.stringify({ password }),
+  });
+  if (!res.ok) { errEl.textContent = 'Failed to reset password.'; errEl.style.display = 'block'; return; }
+  okEl.textContent = 'Password updated successfully!'; okEl.style.display = 'block';
+  setTimeout(() => closeModal('modal-reset'), 1500);
+}
+
+// ── Delete ──
+async function deleteUser(userId, email) {
+  if (!confirm(`Delete account for ${email}? This cannot be undone.`)) return;
+  const res = await fetch(`/api/admin/users/${userId}`, {
+    method: 'DELETE',
+    headers: { 'x-admin-key': ADMIN_KEY },
+  });
+  if (!res.ok) { toast('Failed to delete user'); return; }
+  toast(`Deleted ${email}`);
+  loadUsers();
+}
+
+// ── Helpers ──
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+});
+
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>

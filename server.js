@@ -6,7 +6,8 @@ const jwt      = require('jsonwebtoken');
 
 const app        = express();
 const PORT       = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'cos-dev-secret-change-in-production';
+const JWT_SECRET  = process.env.JWT_SECRET  || 'cos-dev-secret-change-in-production';
+const ADMIN_KEY   = process.env.ADMIN_KEY   || 'cos-admin';
 const DATA_DIR   = path.join(__dirname, 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
@@ -43,7 +44,7 @@ app.post('/api/auth/signup', async (req, res) => {
   writeUsers(users);
   writeUserData(id, { events:[], buckets:[], channels:[], csv:null, inspo:[], goals:[], goalsOpen:true });
 
-  const token = jwt.sign({ userId: id, email: email.toLowerCase() }, JWT_SECRET, { expiresIn: '30d' });
+  const token = jwt.sign({ userId: id, email: email.toLowerCase() }, JWT_SECRET, { expiresIn: '365d' });
   res.json({ token, email: email.toLowerCase() });
 });
 
@@ -58,8 +59,13 @@ app.post('/api/auth/login', async (req, res) => {
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
 
-  const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
+  const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '365d' });
   res.json({ token, email: user.email });
+});
+
+app.get('/api/auth/refresh', requireAuth, (req, res) => {
+  const token = jwt.sign({ userId: req.user.userId, email: req.user.email }, JWT_SECRET, { expiresIn: '365d' });
+  res.json({ token });
 });
 
 app.get('/api/data', requireAuth, (req, res) => {
@@ -136,5 +142,67 @@ function parseShortNum(s) {
   if (lower.includes('k')) return Math.round(n * 1e3);
   return Math.round(n) || 0;
 }
+
+// ── Admin panel ──────────────────────────────────────────────────────────────
+
+function requireAdmin(req, res, next) {
+  const key = req.headers['x-admin-key'] || req.query.key;
+  if (key !== ADMIN_KEY) return res.status(401).json({ error: 'Invalid admin key' });
+  next();
+}
+
+// Serve admin HTML
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+// List all users
+app.get('/api/admin/users', requireAdmin, (req, res) => {
+  const users = readUsers().map(u => ({ id: u.id, email: u.email, createdAt: u.createdAt }));
+  res.json(users);
+});
+
+// Get any user's data
+app.get('/api/admin/users/:id/data', requireAdmin, (req, res) => {
+  res.json(readUserData(parseInt(req.params.id)));
+});
+
+// Overwrite any user's data
+app.post('/api/admin/users/:id/data', requireAdmin, (req, res) => {
+  writeUserData(parseInt(req.params.id), req.body);
+  res.json({ ok: true });
+});
+
+// Issue a token for any user (log in as them)
+app.post('/api/admin/impersonate', requireAdmin, (req, res) => {
+  const { userId } = req.body || {};
+  const users = readUsers();
+  const user = users.find(u => u.id === parseInt(userId));
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '365d' });
+  res.json({ token, email: user.email });
+});
+
+// Delete a user account + data
+app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
+  const id = parseInt(req.params.id);
+  let users = readUsers();
+  users = users.filter(u => u.id !== id);
+  writeUsers(users);
+  try { fs.unlinkSync(userFile(id)); } catch {}
+  res.json({ ok: true });
+});
+
+// Reset a user's password
+app.post('/api/admin/users/:id/reset-password', requireAdmin, async (req, res) => {
+  const { password } = req.body || {};
+  if (!password || password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 chars' });
+  const users = readUsers();
+  const user = users.find(u => u.id === parseInt(req.params.id));
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  user.passwordHash = await bcrypt.hash(password, 10);
+  writeUsers(users);
+  res.json({ ok: true });
+});
 
 app.listen(PORT, () => console.log(`Content Strategy Tracker running at http://localhost:${PORT}`));
