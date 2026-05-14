@@ -38,6 +38,7 @@ let inspoFilter = 'All';
 let inspoType   = 'image';
 let pendingImage = null;
 let amountsHidden = false;
+let activeChannelFilter = null; // null = ALL
 
 function getToken() { return localStorage.getItem('cos-token') || ''; }
 
@@ -125,6 +126,31 @@ function renderCalendar(){
     let yr=now.getFullYear(), mo=now.getMonth()+m;
     if(mo>11){mo-=12;yr++;} container.appendChild(buildMonth(yr,mo,now,m===0));
   }
+}
+
+function renderChannelFilter(){
+  const wrap=document.getElementById('channel-filter');
+  const list=document.getElementById('channel-filter-list');
+  if(!wrap||!list) return;
+  if(!S.channels.length){ wrap.style.display='none'; return; }
+  wrap.style.display='block';
+  list.innerHTML='';
+
+  // ALL button
+  const allBtn=document.createElement('button');
+  allBtn.className='ch-filter-btn'+(activeChannelFilter===null?' active':'');
+  allBtn.innerHTML=`<span class="ch-filter-all-dot"></span> All`;
+  allBtn.onclick=()=>{ activeChannelFilter=null; renderChannelFilter(); renderCalendar(); };
+  list.appendChild(allBtn);
+
+  // One button per channel
+  S.channels.forEach(ch=>{
+    const btn=document.createElement('button');
+    btn.className='ch-filter-btn'+(activeChannelFilter===ch.id?' active':'');
+    btn.innerHTML=`<span class="ch-filter-dot" style="background:${ch.color}"></span>${ch.icon||'📡'} ${escHtml(ch.name)}`;
+    btn.onclick=()=>{ activeChannelFilter=ch.id; renderChannelFilter(); renderCalendar(); };
+    list.appendChild(btn);
+  });
 }
 function toggleSidebar(){
   document.body.classList.toggle('sidebar-hidden');
@@ -251,7 +277,7 @@ function buildMonth(yr,mo,today,isCurrent){
 
   // Calculate sponsorship total for this month
   const prefix=`${yr}-${String(mo+1).padStart(2,'0')}`;
-  const sponEvs=S.events.filter(e=>e.sponsored&&e.date&&e.date.startsWith(prefix));
+  const sponEvs=S.events.filter(e=>e.sponsored&&e.date&&e.date.startsWith(prefix)&&(activeChannelFilter===null||e.channelId===activeChannelFilter));
   const sponTotal=sponEvs.reduce((sum,e)=>sum+(e.sponsoredAmount||0),0);
   const sponBadge=sponEvs.length
     ? `<span class="month-spon-badge">💰 <span class="month-spon-amount${amountsHidden?' hidden':''}">$${sponTotal.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</span><button class="month-spon-eye" onclick="event.stopPropagation();toggleAmounts()">${amountsHidden?'🙈':'👁'}</button></span>`
@@ -273,7 +299,7 @@ function buildMonth(yr,mo,today,isCurrent){
     else{d=i-firstDay+1;dm=mo;dy=yr;}
     const ds=`${dy}-${String(dm+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const isToday=d===today.getDate()&&dm===today.getMonth()&&dy===today.getFullYear();
-    const evs=S.events.filter(e=>e.date===ds);
+    const evs=S.events.filter(e=>e.date===ds&&(activeChannelFilter===null||e.channelId===activeChannelFilter));
     const cell=document.createElement('div');
     const col=i%7; // 0=Sun, 6=Sat
     const isWeekend=(col===0||col===6);
@@ -427,7 +453,7 @@ function setEventAmount(id,value){
 function renderSponsoredTotal(){ renderCalendar(); }
 
 // ════════════════ BOARD ════════════════
-function renderBoard(){ renderBuckets(); renderChannels(); }
+function renderBoard(){ renderBuckets(); renderChannels(); renderChannelFilter(); }
 function renderBuckets(){
   const bar=document.getElementById('bucket-tabs-bar'), panels=document.getElementById('bucket-panels');
   bar.innerHTML=''; panels.innerHTML='';
@@ -970,6 +996,6 @@ async function init() {
     setUserInSidebar(payload.email);
   } catch {}
   refreshToken(); // extend session in background
-  renderCalendar(); renderGoals(); renderSponsoredTotal(); renderActions();
+  renderCalendar(); renderGoals(); renderSponsoredTotal(); renderActions(); renderChannelFilter();
 }
 init();
