@@ -110,6 +110,50 @@ app.post('/api/data', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ── OG link preview ───────────────────────────────────────────────────────────
+app.get('/api/og-preview', requireAuth, async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).json({ error: 'URL required' });
+  try {
+    const r = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!r.ok) return res.status(502).json({ error: `Page returned ${r.status}` });
+    const html = await r.text();
+
+    const meta = (prop, attr = 'content') => {
+      const m = html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+${attr}=["']([^"']+)["']`, 'i'))
+             || html.match(new RegExp(`<meta[^>]+${attr}=["']([^"']+)["'][^>]+(?:property|name)=["']${prop}["']`, 'i'));
+      return m ? m[1].trim() : '';
+    };
+    const tag = (t, attr = '') => {
+      const m = html.match(new RegExp(`<${t}[^>]*>([^<]+)</${t}>`, 'i'));
+      return m ? m[1].trim() : '';
+    };
+
+    const title       = meta('og:title')       || meta('twitter:title')       || tag('title') || '';
+    const description = meta('og:description') || meta('twitter:description') || meta('description') || '';
+    const image       = meta('og:image')        || meta('twitter:image')       || '';
+    const siteName    = meta('og:site_name')    || '';
+
+    // Resolve relative image URLs
+    let resolvedImage = image;
+    if (image && image.startsWith('/')) {
+      try { const u = new URL(url); resolvedImage = u.origin + image; } catch {}
+    }
+
+    res.json({ title, description, image: resolvedImage, siteName });
+  } catch (e) {
+    if (e.name === 'TimeoutError') return res.status(504).json({ error: 'Request timed out' });
+    res.status(500).json({ error: 'Failed to fetch preview' });
+  }
+});
+
 // ── Social stats ──────────────────────────────────────────────────────────────
 app.get('/api/social-stats', requireAuth, async (req, res) => {
   const { url } = req.query;

@@ -138,7 +138,10 @@
     <section class="section" id="section-inspo">
       <div class="inspo-toolbar">
         <div class="inspo-filters" id="inspo-filters"></div>
-        <div style="display:flex;gap:8px;flex-shrink:0">
+        <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
+          <select id="inspo-ch-filter" class="inspo-ch-select" onchange="setInspoChannelFilter(this.value)">
+            <option value="">All Channels</option>
+          </select>
           <button class="btn btn-ghost btn-sm" onclick="openInspoModal('link')">🔗 Add Link</button>
           <button class="btn btn-primary btn-sm" onclick="openInspoModal('image')">+ Add Image</button>
         </div>
@@ -369,7 +372,18 @@
       <div id="inspo-link-panel" style="display:none">
         <div class="form-group">
           <label>URL *</label>
-          <input id="inspo-url" type="url" placeholder="https://…"/>
+          <div style="position:relative">
+            <input id="inspo-url" type="url" placeholder="https://…"/>
+            <span id="inspo-url-spinner" class="inspo-url-spinner" style="display:none">⏳</span>
+          </div>
+        </div>
+        <div id="inspo-og-preview" class="inspo-og-preview" style="display:none">
+          <img id="inspo-og-img" class="inspo-og-img" src="" alt=""/>
+          <div class="inspo-og-text">
+            <div id="inspo-og-title" class="inspo-og-title"></div>
+            <div id="inspo-og-desc" class="inspo-og-desc"></div>
+            <div id="inspo-og-site" class="inspo-og-site"></div>
+          </div>
         </div>
       </div>
 
@@ -382,6 +396,11 @@
         <label>Platform</label>
         <div class="plat-select-row" id="plat-pills"></div>
         <input id="inspo-custom-plat" type="text" placeholder="Or type a custom platform…" style="margin-top:8px;font-size:12.5px;padding:6px 10px"/>
+      </div>
+
+      <div class="form-group" id="inspo-channel-group">
+        <label>Channel (optional)</label>
+        <select id="inspo-channel" style="font-size:13px;padding:7px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface2);color:var(--text);width:100%"></select>
       </div>
 
       <div class="form-group" style="margin-bottom:0">

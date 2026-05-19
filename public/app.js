@@ -34,9 +34,10 @@ function hashStr(s) { let h=0; for(const c of s) h=(Math.imul(31,h)+c.charCodeAt
 // ════════════════ STATE ════════════════
 let S = {events:[],buckets:[],channels:[],csv:null,inspo:[],goals:[],goalsOpen:false,braindumps:[]};
 let activeBucket = null;
-let inspoFilter = 'All';
-let inspoType   = 'image';
-let pendingImage = null;
+let inspoFilter        = 'All';
+let inspoChannelFilter = '';
+let inspoType          = 'image';
+let pendingImage       = null;
 let amountsHidden = false;
 let activeChannelFilter = null; // null = ALL
 
@@ -573,6 +574,7 @@ function getInspoPlatforms() {
 
 function renderInspo() {
   renderInspoFilters();
+  renderInspoChannelFilter();
   renderInspoGrid();
 }
 
@@ -589,12 +591,35 @@ function renderInspoFilters() {
   });
 }
 
+function renderInspoChannelFilter() {
+  const sel = document.getElementById('inspo-ch-filter');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">All Channels</option>';
+  S.channels.forEach(ch => {
+    const opt = document.createElement('option');
+    opt.value = ch.id;
+    opt.textContent = `${ch.icon || '📡'} ${ch.name}`;
+    sel.appendChild(opt);
+  });
+  sel.value = prev || inspoChannelFilter;
+}
+
+function setInspoChannelFilter(val) {
+  inspoChannelFilter = val;
+  renderInspoGrid();
+}
+
 function renderInspoGrid() {
   const grid = document.getElementById('inspo-grid');
-  const items = inspoFilter === 'All' ? S.inspo : S.inspo.filter(i => i.platform === inspoFilter);
+  let items = inspoFilter === 'All' ? S.inspo : S.inspo.filter(i => i.platform === inspoFilter);
+  if (inspoChannelFilter) items = items.filter(i => i.channelId === inspoChannelFilter);
 
   if (!items.length) {
-    grid.innerHTML = `<div class="inspo-empty"><h3>${inspoFilter === 'All' ? 'No inspiration yet' : `Nothing for ${inspoFilter}`}</h3><p>Add links or paste images to build your mood board.<br>Press <strong>⌘V</strong> anywhere to paste an image from your clipboard.</p></div>`;
+    const ch = S.channels.find(c => c.id === inspoChannelFilter);
+    const chName = ch ? `${ch.icon || '📡'} ${ch.name}` : '';
+    const emptyMsg = inspoFilter !== 'All' ? `Nothing for ${inspoFilter}${chName ? ' · ' + chName : ''}` : chName ? `Nothing for ${chName}` : 'No inspiration yet';
+    grid.innerHTML = `<div class="inspo-empty"><h3>${emptyMsg}</h3><p>Add links or paste images to build your mood board.<br>Press <strong>⌘V</strong> anywhere to paste an image from your clipboard.</p></div>`;
     return;
   }
 
@@ -607,12 +632,16 @@ function renderInspoGrid() {
 function buildInspoCard(item) {
   const col   = platColor(item.platform || 'Other');
   const emoji = platEmoji(item.platform || 'Other');
+  const ch    = S.channels.find(c => c.id === item.channelId);
   const card  = document.createElement('div');
   card.className = 'inspo-card';
 
   let topHTML = '';
   if (item.type === 'image' && item.imageData) {
-    topHTML = `<img src="${item.imageData}" alt="${item.title||''}" loading="lazy"/>`;
+    topHTML = `<img src="${item.imageData}" alt="${escHtml(item.title||'')}" loading="lazy"/>`;
+  } else if (item.type === 'link' && item.ogImage) {
+    // Rich OG preview image
+    topHTML = `<div class="inspo-og-thumb"><img src="${escHtml(item.ogImage)}" alt="" loading="lazy" onerror="this.parentElement.style.display='none'"/></div>`;
   } else if (item.type === 'link') {
     const domain = item.url ? getDomain(item.url) : '';
     topHTML = `<div class="inspo-link-preview">
@@ -621,6 +650,8 @@ function buildInspoCard(item) {
     </div>`;
   }
 
+  const chBadge = ch ? `<span class="inspo-card-ch">${ch.icon||'📡'} ${escHtml(ch.name)}</span>` : '';
+
   card.innerHTML = `
     ${topHTML}
     <div class="inspo-card-controls">
@@ -628,11 +659,13 @@ function buildInspoCard(item) {
       <div class="inspo-ctrl-btn" onclick="deleteInspo('${item.id}')" title="Delete">✕</div>
     </div>
     <div class="inspo-card-body">
-      ${item.title ? `<div class="inspo-card-title">${item.title}</div>` : ''}
-      ${item.url   ? `<a class="inspo-card-url" href="${item.url}" target="_blank" rel="noopener">${item.url}</a>` : ''}
-      ${item.notes ? `<div class="inspo-card-notes">${item.notes}</div>` : ''}
+      ${item.title ? `<div class="inspo-card-title">${escHtml(item.title)}</div>` : ''}
+      ${item.ogDescription && !item.title ? `<div class="inspo-card-notes">${escHtml(item.ogDescription.slice(0,120))}…</div>` : ''}
+      ${item.notes ? `<div class="inspo-card-notes">${escHtml(item.notes)}</div>` : ''}
+      ${item.url   ? `<a class="inspo-card-url" href="${item.url}" target="_blank" rel="noopener">${getDomain(item.url)}</a>` : ''}
       <div class="inspo-card-footer">
-        <span class="inspo-card-plat" style="background:${col}18;color:${col}">${emoji} ${item.platform||'Other'}</span>
+        <span class="inspo-card-plat" style="background:${col}18;color:${col}">${emoji} ${escHtml(item.platform||'Other')}</span>
+        ${chBadge}
         <span class="inspo-card-date">${timeAgo(item.createdAt)}</span>
       </div>
     </div>`;
@@ -656,12 +689,28 @@ function openInspoModal(type) {
   document.getElementById('inspo-notes').value   = '';
   document.getElementById('inspo-url').value     = '';
   document.getElementById('inspo-custom-plat').value = '';
+  hideOgPreview();
   clearInspoImageUI();
   switchInspoType(type);
   buildPlatPills();
+  // Populate channel dropdown
+  const chSel = document.getElementById('inspo-channel');
+  chSel.innerHTML = '<option value="">— None —</option>';
+  S.channels.forEach(ch => {
+    const opt = document.createElement('option');
+    opt.value = ch.id;
+    opt.textContent = `${ch.icon||'📡'} ${ch.name}`;
+    chSel.appendChild(opt);
+  });
+  document.getElementById('inspo-channel-group').style.display = S.channels.length ? '' : 'none';
   openModal('modal-inspo');
   if (type === 'link') setTimeout(()=>document.getElementById('inspo-url').focus(),60);
   else setTimeout(()=>document.getElementById('inspo-title').focus(),60);
+}
+
+function hideOgPreview() {
+  document.getElementById('inspo-og-preview').style.display = 'none';
+  document.getElementById('inspo-url-spinner').style.display = 'none';
 }
 
 function switchInspoType(type) {
@@ -677,6 +726,51 @@ function getCustomPlatforms() {
   const predefined = new Set(PLAT_DEFS.map(p => p.name));
   return [...new Set(S.inspo.map(i => i.platform).filter(p => p && !predefined.has(p)))];
 }
+
+// OG preview fetch — triggered on URL blur
+let _ogFetchUrl = '';
+async function fetchAndShowOgPreview(url) {
+  if (!url || url === _ogFetchUrl) return;
+  _ogFetchUrl = url;
+  const spinner = document.getElementById('inspo-url-spinner');
+  spinner.style.display = 'inline';
+  hideOgPreview();
+  try {
+    const token = localStorage.getItem('cwm-token');
+    const res = await fetch(`/api/og-preview?url=${encodeURIComponent(url)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return;
+    const og = await res.json();
+    if (og.error) return;
+    // Auto-fill title if blank
+    const titleEl = document.getElementById('inspo-title');
+    if (!titleEl.value && og.title) titleEl.value = og.title;
+    // Show preview card
+    const preview = document.getElementById('inspo-og-preview');
+    const img     = document.getElementById('inspo-og-img');
+    if (og.image) {
+      img.src = og.image;
+      img.style.display = 'block';
+      img.onerror = () => { img.style.display = 'none'; };
+    } else {
+      img.style.display = 'none';
+    }
+    document.getElementById('inspo-og-title').textContent = og.title || '';
+    document.getElementById('inspo-og-desc').textContent  = og.description ? og.description.slice(0, 140) : '';
+    document.getElementById('inspo-og-site').textContent  = og.siteName || (url ? getDomain(url) : '');
+    preview.style.display = 'flex';
+    // Store og data for save
+    preview.dataset.ogImage       = og.image || '';
+    preview.dataset.ogDescription = og.description || '';
+  } catch {}
+  finally { spinner.style.display = 'none'; }
+}
+
+document.getElementById('inspo-url').addEventListener('blur', e => {
+  const url = e.target.value.trim();
+  if (url) fetchAndShowOgPreview(url);
+});
 
 function buildPlatPills() {
   const row = document.getElementById('plat-pills');
@@ -707,6 +801,10 @@ document.getElementById('save-inspo-btn').addEventListener('click', () => {
   const url      = document.getElementById('inspo-url').value.trim();
   const custom   = document.getElementById('inspo-custom-plat').value.trim();
   const platform = custom || selectedPlatform || 'Other';
+  const channelId = document.getElementById('inspo-channel').value || '';
+  const ogPreviewEl = document.getElementById('inspo-og-preview');
+  const ogImage     = inspoType === 'link' ? (ogPreviewEl.dataset.ogImage || '') : '';
+  const ogDescription = inspoType === 'link' ? (ogPreviewEl.dataset.ogDescription || '') : '';
 
   if (inspoType === 'image' && !pendingImage) { alert('Please add an image first.'); return; }
   if (inspoType === 'link'  && !url)          { alert('Please enter a URL.'); return; }
@@ -719,6 +817,9 @@ document.getElementById('save-inspo-btn').addEventListener('click', () => {
     url:       inspoType==='link' ? url : '',
     imageData: inspoType==='image' ? pendingImage : null,
     platform,
+    channelId,
+    ogImage,
+    ogDescription,
     createdAt: Date.now(),
   });
   persist();
